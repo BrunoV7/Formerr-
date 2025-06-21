@@ -48,7 +48,32 @@ app.add_middleware(
 
 # Adicionar middlewares personalizados
 app.middleware("http")(error_handler_middleware)
-app.middleware("http")(request_middleware)
+
+# Health check endpoint for Docker/Kubernetes
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring and load balancers
+    """
+    try:
+        # Test database connection
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        
+        return {
+            "status": "healthy",
+            "service": "formerr-api",
+            "version": "1.0.0",
+            "database": "connected"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "service": "formerr-api",
+            "version": "1.0.0",
+            "database": "disconnected",
+            "error": str(e)
+        }
 
 # Incluir rotas
 app.include_router(auth_router, prefix="/auth", tags=["auth"])

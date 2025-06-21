@@ -1,0 +1,66 @@
+name: Deploy Infrastructure - Production
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TF_VERSION: '1.6.0'
+
+jobs:
+  terraform-production:
+    name: Deploy Production Infrastructure
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./infrastructure/terraform/production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+    
+    - name: Terraform Format Check
+      run: terraform fmt -check
+    
+    - name: Terraform Init
+      run: terraform init
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Terraform Validate
+      run: terraform validate
+    
+    - name: Terraform Plan
+      run: terraform plan -var="do_token=${{ secrets.DO_TOKEN_PROD }}"
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main'
+      run: terraform apply -auto-approve -var="do_token=${{ secrets.DO_TOKEN_PROD }}"
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Save Terraform Outputs
+      if: github.ref == 'refs/heads/main'
+      run: |
+        echo "CLUSTER_ENDPOINT=$(terraform output -raw cluster_endpoint)" >> $GITHUB_ENV
+        echo "CLUSTER_ID=$(terraform output -raw cluster_id)" >> $GITHUB_ENV
+        terraform output -raw cluster_token > cluster_token.txt
+        terraform output -raw cluster_ca_certificate > cluster_ca.txt
+    
+    - name: Upload cluster credentials
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: prod-cluster-credentials
+        path: |
+          infrastructure/terraform/production/cluster_token.txt
+          infrastructure/terraform/production/cluster_ca.txt

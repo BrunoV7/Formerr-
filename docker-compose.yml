@@ -1,0 +1,105 @@
+# =============================================================================
+# Docker Compose for Local Development
+# Includes: PostgreSQL, Backend API, Frontend App
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: formerr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: formerr_db
+      POSTGRES_USER: formerr_user
+      POSTGRES_PASSWORD: formerr_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./Formerr-FastAPI/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U formerr_user -d formerr_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - formerr-network
+
+  # FastAPI Backend
+  backend:
+    image: formerr-backend
+    container_name: formerr-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://formerr_user:formerr_password@postgres:5432/formerr_db
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: formerr_user
+      DB_PASSWORD: formerr_password
+      DB_NAME: formerr_db
+      
+      # Environment
+      ENVIRONMENT: development
+      
+      # Authentication (set these in .env file)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-development-jwt-secret-key}
+      SESSION_SECRET: ${SESSION_SECRET:-development-session-secret}
+      
+      # URLs
+      FRONTEND_SUCCESS_URL: http://localhost:3000/auth/success
+      FRONTEND_ERROR_URL: http://localhost:3000/auth/error
+      OAUTH_CALLBACK_URL: http://localhost:8000/auth/github/callback
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Formerr-FastAPI:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - formerr-network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./formerr-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: formerr-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - formerr-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  formerr-network:
+    driver: bridge

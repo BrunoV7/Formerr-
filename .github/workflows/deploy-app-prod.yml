@@ -1,0 +1,174 @@
+name: Deploy Application - Production
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - 'Formerr-FastAPI/**'
+      - 'formerr-frontend/**'
+      - 'infrastructure/k8s/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com
+  REPO_NAME: formerr
+
+jobs:
+  deploy-infra:
+    name: Deploy Infrastructure First
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./infrastructure/terraform/production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '1.6.0'
+    
+    - name: Terraform Init
+      run: terraform init
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Terraform Apply
+      run: terraform apply -auto-approve -var="do_token=${{ secrets.DO_TOKEN_PROD }}"
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Get cluster credentials
+      id: get-credentials
+      run: |
+        echo "CLUSTER_ENDPOINT=$(terraform output -raw cluster_endpoint)" >> $GITHUB_OUTPUT
+        echo "CLUSTER_TOKEN=$(terraform output -raw cluster_token)" >> $GITHUB_OUTPUT
+        echo "CLUSTER_CA=$(terraform output -raw cluster_ca_certificate)" >> $GITHUB_OUTPUT
+    
+    outputs:
+      cluster_endpoint: ${{ steps.get-credentials.outputs.CLUSTER_ENDPOINT }}
+      cluster_token: ${{ steps.get-credentials.outputs.CLUSTER_TOKEN }}
+      cluster_ca: ${{ steps.get-credentials.outputs.CLUSTER_CA }}
+
+  build-and-deploy:
+    name: Build and Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_TOKEN_PROD }}
+    
+    - name: Build Backend Image
+      run: |
+        docker build -t $REGISTRY/$REPO_NAME/formerr-backend:$GITHUB_SHA ./Formerr-FastAPI
+        docker tag $REGISTRY/$REPO_NAME/formerr-backend:$GITHUB_SHA $REGISTRY/$REPO_NAME/formerr-backend:latest
+    
+    - name: Build Frontend Image
+      run: |
+        docker build -t $REGISTRY/$REPO_NAME/formerr-frontend:$GITHUB_SHA ./formerr-frontend
+        docker tag $REGISTRY/$REPO_NAME/formerr-frontend:$GITHUB_SHA $REGISTRY/$REPO_NAME/formerr-frontend:latest
+    
+    - name: Log in to DigitalOcean Container Registry
+      run: doctl registry login --expiry-seconds 1200
+    
+    - name: Push Backend Image
+      run: |
+        docker push $REGISTRY/$REPO_NAME/formerr-backend:$GITHUB_SHA
+        docker push $REGISTRY/$REPO_NAME/formerr-backend:latest
+    
+    - name: Push Frontend Image
+      run: |
+        docker push $REGISTRY/$REPO_NAME/formerr-frontend:$GITHUB_SHA
+        docker push $REGISTRY/$REPO_NAME/formerr-frontend:latest
+    
+    - name: Download cluster credentials
+      uses: actions/download-artifact@v4
+      with:
+        name: prod-cluster-credentials
+        path: ./credentials
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+    
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ needs.deploy-infra.outputs.cluster_ca }}" | base64 -d > $HOME/.kube/ca.crt
+        kubectl config set-cluster prod-cluster \
+          --server=${{ needs.deploy-infra.outputs.cluster_endpoint }} \
+          --certificate-authority=$HOME/.kube/ca.crt
+        kubectl config set-credentials prod-user \
+          --token=${{ needs.deploy-infra.outputs.cluster_token }}
+        kubectl config set-context prod-context \
+          --cluster=prod-cluster \
+          --user=prod-user \
+          --namespace=formerr
+        kubectl config use-context prod-context
+    
+    - name: Deploy to Kubernetes
+      run: |
+        # Get values from secrets or use defaults
+        POSTGRES_PASS="${{ secrets.DB_PASSWORD || secrets.POSTGRES_PASSWORD || 'formerr_prod_pass_2024' }}"
+        JWT_SECRET="${{ secrets.JWT_SECRET || 'brunov7_super_secret_formerr_2025' }}"
+        SESSION_SECRET="${{ secrets.SESSION_SECRET || 'brunov7_session_secret_2025' }}"
+        DB_HOST="${{ secrets.DB_HOST || 'postgres-service' }}"
+        DB_PORT="${{ secrets.DB_PORT || '5432' }}"
+        DB_USER="${{ secrets.DB_USER || 'formerr_user' }}"
+        DB_NAME="${{ secrets.DB_NAME || 'formerr_db' }}"
+        DATABASE_URL="${{ secrets.DATABASE_URL || 'postgresql+asyncpg://formerr_user:POSTGRES_PASSWORD_PLACEHOLDER@postgres-service:5432/formerr_db' }}"
+        CLIENT_ID="${{ secrets.CLIENT_ID || 'Ov23libwTy1CTdfzvbRg' }}"
+        CLIENT_SECRET="${{ secrets.CLIENT_SECRET || '4f07c7baa3fba7eb00d2e57ba48ae2e15d2da110' }}"
+        
+        # Prepare secrets file
+        cp infrastructure/k8s/secrets-template.yaml infrastructure/k8s/secrets-processed.yaml
+        
+        # Replace placeholders with actual values
+        sed -i "s/POSTGRES_PASSWORD_PLACEHOLDER/${POSTGRES_PASS}/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/JWT_SECRET_PLACEHOLDER/${JWT_SECRET}/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/SESSION_SECRET_PLACEHOLDER/${SESSION_SECRET}/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/GITHUB_CLIENT_ID_PLACEHOLDER/${CLIENT_ID}/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/GITHUB_CLIENT_SECRET_PLACEHOLDER/${CLIENT_SECRET}/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/FRONTEND_SUCCESS_URL_PLACEHOLDER/http:\/\/production-frontend\/auth\/success/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/FRONTEND_ERROR_URL_PLACEHOLDER/http:\/\/production-frontend\/auth\/error/g" infrastructure/k8s/secrets-processed.yaml
+        sed -i "s/OAUTH_CALLBACK_URL_PLACEHOLDER/http:\/\/production-backend\/auth\/github\/callback/g" infrastructure/k8s/secrets-processed.yaml
+        
+        # Replace DATABASE_URL placeholder
+        sed -i "s|DATABASE_URL_PLACEHOLDER|${DATABASE_URL}|g" infrastructure/k8s/secrets-processed.yaml
+        
+        # Use complete DATABASE_URL if provided, otherwise construct it
+        if [ -n "${DATABASE_URL}" ] && [ "${DATABASE_URL}" != "postgresql+asyncpg://formerr_user:POSTGRES_PASSWORD_PLACEHOLDER@postgres-service:5432/formerr_db" ]; then
+          sed -i "s|postgresql+asyncpg:\/\/formerr_user:POSTGRES_PASSWORD_PLACEHOLDER@postgres-service:5432\/formerr_db|${DATABASE_URL}|g" infrastructure/k8s/secrets-processed.yaml
+        else
+          sed -i "s/postgresql+asyncpg:\/\/formerr_user:POSTGRES_PASSWORD_PLACEHOLDER@postgres-service:5432\/formerr_db/postgresql+asyncpg:\/\/${DB_USER}:${POSTGRES_PASS}@${DB_HOST}:${DB_PORT}\/${DB_NAME}?ssl=require/g" infrastructure/k8s/secrets-processed.yaml
+        fi
+        
+        # Update image tags in deployments
+        sed -i "s|formerr-backend:latest|$REGISTRY/$REPO_NAME/formerr-backend:$GITHUB_SHA|g" infrastructure/k8s/backend-deployment.yaml
+        sed -i "s|formerr-frontend:latest|$REGISTRY/$REPO_NAME/formerr-frontend:$GITHUB_SHA|g" infrastructure/k8s/frontend-deployment.yaml
+        
+        # Apply manifests
+        kubectl apply -f infrastructure/k8s/secrets-processed.yaml
+        kubectl apply -f infrastructure/k8s/postgres-deployment.yaml
+        kubectl apply -f infrastructure/k8s/backend-deployment.yaml
+        kubectl apply -f infrastructure/k8s/frontend-deployment.yaml
+    
+    - name: Wait for deployment
+      run: |
+        kubectl rollout status deployment/formerr-backend -n formerr --timeout=300s
+        kubectl rollout status deployment/formerr-frontend -n formerr --timeout=300s
+    
+    - name: Get service URLs
+      run: |
+        echo "Frontend URL: $(kubectl get svc formerr-frontend-service -n formerr -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+        echo "Backend URL: $(kubectl get svc formerr-backend-service -n formerr -o jsonpath='{.spec.clusterIP}'):8000"
