@@ -24,7 +24,7 @@ provider "digitalocean" {
 resource "digitalocean_kubernetes_cluster" "formerr_staging" {
   name     = "formerr-staging"
   region   = var.region
-  version  = var.k8s_version
+  version  = "1.26.3-do.0"
   
   node_pool {
     name       = "worker-pool"
