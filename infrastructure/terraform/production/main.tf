@@ -36,6 +36,10 @@ resource "digitalocean_kubernetes_cluster" "formerr_prod" {
   }
 
   tags = ["formerr", "production", "kubernetes"]
+  
+  lifecycle {
+    ignore_changes = [name, version, node_pool[0].size, node_pool[0].node_count]
+  }
 }
 
 # Configure Kubernetes provider

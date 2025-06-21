@@ -36,6 +36,24 @@ jobs:
       env:
         TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
     
+    - name: Import existing cluster if exists
+      run: |
+        echo "Trying to import existing cluster..."
+        # Get cluster ID by name if it exists
+        CLUSTER_ID=$(curl -s -X GET -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.DO_TOKEN_PROD }}" \
+          "https://api.digitalocean.com/v2/kubernetes/clusters" | \
+          jq -r '.kubernetes_clusters[]? | select(.name=="formerr-production") | .id' || echo "")
+        
+        if [ ! -z "$CLUSTER_ID" ]; then
+          echo "Found existing cluster: $CLUSTER_ID"
+          terraform import -var="do_token=${{ secrets.DO_TOKEN_PROD }}" digitalocean_kubernetes_cluster.formerr_prod $CLUSTER_ID || echo "Import failed or already imported"
+        else
+          echo "No existing cluster found"
+        fi
+      env:
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN_PROD }}
+      continue-on-error: true
+    
     - name: Terraform Apply
       run: terraform apply -auto-approve -var="do_token=${{ secrets.DO_TOKEN_PROD }}"
       env:
