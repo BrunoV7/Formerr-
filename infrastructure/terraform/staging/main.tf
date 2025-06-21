@@ -20,11 +20,14 @@ provider "digitalocean" {
   token = var.do_token
 }
 
+# Get available Kubernetes versions
+data "digitalocean_kubernetes_versions" "example" {}
+
 # Kubernetes cluster
 resource "digitalocean_kubernetes_cluster" "formerr_staging" {
   name    = "formerr-staging"
   region  = var.region
-  version = "1.26.3-do.0"
+  version = data.digitalocean_kubernetes_versions.example.latest_version
 
   node_pool {
     name       = "worker-pool"
@@ -86,7 +89,7 @@ resource "helm_release" "prometheus" {
 
 # Load Balancer for external access
 resource "digitalocean_loadbalancer" "formerr_lb" {
-  name   = "formerr-staging-lb"
+  name   = "formerr-staging-lb-v2"
   region = var.region
 
   forwarding_rule {
