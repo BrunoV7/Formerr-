@@ -1,0 +1,243 @@
+name: 🎯 Pipeline Orquestradora
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_infra:
+        description: 'Forçar deploy de infraestrutura'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  TF_VERSION: '1.6.0'
+
+jobs:
+  detect-context:
+    name: 🔍 Detectar Contexto do Commit
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.context.outputs.environment }}
+      has_infra_changes: ${{ steps.context.outputs.has_infra_changes }}
+      has_app_changes: ${{ steps.context.outputs.has_app_changes }}
+      force_infra: ${{ steps.context.outputs.force_infra }}
+      should_deploy_infra: ${{ steps.context.outputs.should_deploy_infra }}
+      should_deploy_app: ${{ steps.context.outputs.should_deploy_app }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Detect context
+      id: context
+      run: |
+        # Determine environment based on branch or manual input
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          FORCE_INFRA="${{ github.event.inputs.force_infra }}"
+        else
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENVIRONMENT="production"
+          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+            ENVIRONMENT="staging"
+          else
+            ENVIRONMENT="staging"
+          fi
+          FORCE_INFRA="false"
+        fi
+        
+        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+        echo "force_infra=$FORCE_INFRA" >> $GITHUB_OUTPUT
+        
+        # Check for infrastructure changes
+        INFRA_CHANGES=$(git diff --name-only HEAD~1 HEAD | grep -E "infrastructure/terraform/$ENVIRONMENT/" || echo "")
+        if [ -n "$INFRA_CHANGES" ]; then
+          echo "has_infra_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_infra_changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Check for application changes
+        APP_CHANGES=$(git diff --name-only HEAD~1 HEAD | grep -E "(Formerr-FastAPI/|formerr-frontend/|infrastructure/k8s/)" || echo "")
+        if [ -n "$APP_CHANGES" ]; then
+          echo "has_app_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_app_changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Determine if infrastructure should be deployed
+        if [ "$FORCE_INFRA" == "true" ] || [ "$INFRA_CHANGES" != "" ]; then
+          echo "should_deploy_infra=true" >> $GITHUB_OUTPUT
+        else
+          # Check if infrastructure exists
+          if [ "$ENVIRONMENT" == "production" ]; then
+            TOKEN="${{ secrets.DO_TOKEN_PROD }}"
+          else
+            TOKEN="${{ secrets.DO_TOKEN_STAGING }}"
+          fi
+          
+          # Check if cluster exists via API
+          CLUSTER_NAME="formerr-$ENVIRONMENT"
+          CLUSTER_EXISTS=$(curl -s -X GET \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.digitalocean.com/v2/kubernetes/clusters" | \
+            jq -r ".kubernetes_clusters[]? | select(.name==\"$CLUSTER_NAME\") | .id" || echo "")
+          
+          if [ -z "$CLUSTER_EXISTS" ]; then
+            echo "should_deploy_infra=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_deploy_infra=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+        
+        # Determine if application should be deployed
+        if [ "$APP_CHANGES" != "" ]; then
+          echo "should_deploy_app=true" >> $GITHUB_OUTPUT
+        else
+          echo "should_deploy_app=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "🔍 Context Analysis:"
+        echo "  Environment: $ENVIRONMENT"
+        echo "  Infra changes: $INFRA_CHANGES"
+        echo "  App changes: $APP_CHANGES"
+        echo "  Force infra: $FORCE_INFRA"
+        echo "  Should deploy infra: $(echo "should_deploy_infra=$should_deploy_infra" | cut -d'=' -f2)"
+        echo "  Should deploy app: $(echo "should_deploy_app=$should_deploy_app" | cut -d'=' -f2)"
+
+  deploy-infrastructure-production:
+    name: 🏗️ Deploy Infraestrutura - Produção
+    runs-on: ubuntu-latest
+    needs: detect-context
+    if: needs.detect-context.outputs.environment == 'production' && needs.detect-context.outputs.should_deploy_infra == 'true'
+    
+    uses: ./.github/workflows/infrastructure-production.yml
+    with:
+      force_deploy: ${{ needs.detect-context.outputs.force_infra }}
+    secrets: inherit
+
+  deploy-infrastructure-staging:
+    name: 🏗️ Deploy Infraestrutura - Staging
+    runs-on: ubuntu-latest
+    needs: detect-context
+    if: needs.detect-context.outputs.environment == 'staging' && needs.detect-context.outputs.should_deploy_infra == 'true'
+    
+    uses: ./.github/workflows/infrastructure-staging.yml
+    with:
+      force_deploy: ${{ needs.detect-context.outputs.force_infra }}
+    secrets: inherit
+
+  deploy-application-production:
+    name: 🚀 Deploy Aplicação - Produção
+    runs-on: ubuntu-latest
+    needs: [detect-context, deploy-infrastructure-production]
+    if: needs.detect-context.outputs.environment == 'production' && needs.detect-context.outputs.should_deploy_app == 'true'
+    
+    uses: ./.github/workflows/deploy-production.yml
+    secrets: inherit
+
+  deploy-application-staging:
+    name: 🚀 Deploy Aplicação - Staging
+    runs-on: ubuntu-latest
+    needs: [detect-context, deploy-infrastructure-staging]
+    if: needs.detect-context.outputs.environment == 'staging' && needs.detect-context.outputs.should_deploy_app == 'true'
+    
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit
+
+  validation-production:
+    name: 🔍 Validação - Produção
+    runs-on: ubuntu-latest
+    needs: [detect-context, deploy-application-production]
+    if: needs.detect-context.outputs.environment == 'production' && needs.detect-context.outputs.should_deploy_app == 'true'
+    
+    uses: ./.github/workflows/validation-observability.yml
+    with:
+      environment: 'production'
+    secrets: inherit
+
+  validation-staging:
+    name: 🔍 Validação - Staging
+    runs-on: ubuntu-latest
+    needs: [detect-context, deploy-application-staging]
+    if: needs.detect-context.outputs.environment == 'staging' && needs.detect-context.outputs.should_deploy_app == 'true'
+    
+    uses: ./.github/workflows/validation-observability.yml
+    with:
+      environment: 'staging'
+    secrets: inherit
+
+  generate-final-report:
+    name: 📋 Relatório Final
+    runs-on: ubuntu-latest
+    needs: [detect-context, deploy-infrastructure-production, deploy-infrastructure-staging, deploy-application-production, deploy-application-staging, validation-production, validation-staging]
+    if: always()
+    
+    steps:
+    - name: Generate final report
+      run: |
+        echo "🎯 Relatório Final da Pipeline Orquestradora"
+        echo "============================================="
+        echo "Timestamp: $(date)"
+        echo "Commit: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref }}"
+        echo "Environment: ${{ needs.detect-context.outputs.environment }}"
+        echo ""
+        echo "Context Analysis:"
+        echo "- Has Infra Changes: ${{ needs.detect-context.outputs.has_infra_changes }}"
+        echo "- Has App Changes: ${{ needs.detect-context.outputs.has_app_changes }}"
+        echo "- Force Infra: ${{ needs.detect-context.outputs.force_infra }}"
+        echo "- Should Deploy Infra: ${{ needs.detect-context.outputs.should_deploy_infra }}"
+        echo "- Should Deploy App: ${{ needs.detect-context.outputs.should_deploy_app }}"
+        echo ""
+        echo "Pipeline Results:"
+        
+        if [ "${{ needs.detect-context.outputs.environment }}" == "production" ]; then
+          echo "- Infrastructure Production: ${{ needs.deploy-infrastructure-production.result || 'skipped' }}"
+          echo "- Application Production: ${{ needs.deploy-application-production.result || 'skipped' }}"
+          echo "- Validation Production: ${{ needs.validation-production.result || 'skipped' }}"
+        else
+          echo "- Infrastructure Staging: ${{ needs.deploy-infrastructure-staging.result || 'skipped' }}"
+          echo "- Application Staging: ${{ needs.deploy-application-staging.result || 'skipped' }}"
+          echo "- Validation Staging: ${{ needs.validation-staging.result || 'skipped' }}"
+        fi
+        
+        echo ""
+        echo "🎉 Pipeline Orquestradora concluída!"
+        
+        # Determine overall success
+        if [ "${{ needs.detect-context.outputs.environment }}" == "production" ]; then
+          if [ "${{ needs.deploy-infrastructure-production.result }}" == "success" ] || [ "${{ needs.deploy-infrastructure-production.result }}" == "skipped" ]; then
+            if [ "${{ needs.deploy-application-production.result }}" == "success" ] || [ "${{ needs.deploy-application-production.result }}" == "skipped" ]; then
+              if [ "${{ needs.validation-production.result }}" == "success" ] || [ "${{ needs.validation-production.result }}" == "skipped" ]; then
+                echo "✅ Todas as etapas foram bem-sucedidas!"
+                exit 0
+              fi
+            fi
+          fi
+        else
+          if [ "${{ needs.deploy-infrastructure-staging.result }}" == "success" ] || [ "${{ needs.deploy-infrastructure-staging.result }}" == "skipped" ]; then
+            if [ "${{ needs.deploy-application-staging.result }}" == "success" ] || [ "${{ needs.deploy-application-staging.result }}" == "skipped" ]; then
+              if [ "${{ needs.validation-staging.result }}" == "success" ] || [ "${{ needs.validation-staging.result }}" == "skipped" ]; then
+                echo "✅ Todas as etapas foram bem-sucedidas!"
+                exit 0
+              fi
+            fi
+          fi
+        fi
+        
+        echo "⚠️ Algumas etapas falharam"
+        exit 1 
