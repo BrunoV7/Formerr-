@@ -87,23 +87,24 @@ resource "helm_release" "prometheus" {
   depends_on = [kubernetes_namespace.monitoring]
 }
 
-# Load Balancer for external access
-resource "digitalocean_loadbalancer" "formerr_lb" {
-  name   = "formerr-prod-lb-v2"
-  region = var.region
-
-  forwarding_rule {
-    entry_protocol  = "http"
-    entry_port      = 80
-    target_protocol = "http"
-    target_port     = 80
-  }
-
-  healthcheck {
-    protocol = "http"
-    port     = 80
-    path     = "/health"
-  }
-
-  droplet_tag = "formerr-prod"
-}
+# Load Balancer for external access - DISABLED to save LB limit
+# Will use Ingress Controller LoadBalancer instead
+# resource "digitalocean_loadbalancer" "formerr_lb" {
+#   name   = "formerr-prod-lb-v2"
+#   region = var.region
+# 
+#   forwarding_rule {
+#     entry_protocol  = "http"
+#     entry_port      = 80
+#     target_protocol = "http"
+#     target_port     = 80
+#   }
+# 
+#   healthcheck {
+#     protocol = "http"
+#     port     = 80
+#     path     = "/health"
+#   }
+# 
+#   droplet_tag = "formerr-prod"
+# }

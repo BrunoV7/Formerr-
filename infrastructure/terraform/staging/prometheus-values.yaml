@@ -1,7 +1,7 @@
 grafana:
   adminPassword: admin123
   service:
-    type: LoadBalancer
+    type: ClusterIP
   ingress:
     enabled: true
     hosts:

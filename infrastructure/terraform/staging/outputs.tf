@@ -20,7 +20,7 @@ output "cluster_ca_certificate" {
   sensitive   = true
 }
 
-output "load_balancer_ip" {
-  description = "Load balancer IP address"
-  value       = digitalocean_loadbalancer.formerr_lb.ip
-}
+# output "load_balancer_ip" {
+#   description = "Load balancer IP address"  
+#   value       = digitalocean_loadbalancer.formerr_lb.ip
+# }
