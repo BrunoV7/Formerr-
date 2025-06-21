@@ -1,0 +1,1110 @@
+{
+  "info": {
+    "_postman_id": "formerr-api-enhanced-v2",
+    "name": "Formerr API - Enhanced Collection",
+    "description": "Coleção completa e otimizada para a API Formerr com:\n- ✅ Variáveis de ambiente\n- 🔐 Sistema completo de autenticação\n- 📊 Dashboard e Analytics\n- 📝 CRUD completo de formulários\n- 🧪 Testes automatizados\n- 📋 Scripts de pre/post-request\n\n**Como usar:**\n1. Configure as variáveis de ambiente\n2. Execute os endpoints de autenticação para obter token\n3. Use os demais endpoints (token será inserido automaticamente)\n\n**Autor:** Equipe de Desenvolvimento\n**Versão:** 2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{base_url}}",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "{{auth_token}}",
+      "type": "string"
+    },
+    {
+      "key": "formId",
+      "value": "{{form_id}}",
+      "type": "string"
+    },
+    {
+      "key": "sectionId",
+      "value": "{{section_id}}",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "{{question_id}}",
+      "type": "string"
+    },
+    {
+      "key": "responseSessionId",
+      "value": "{{response_session_id}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has correct structure', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Verifica se a aplicação está funcionando corretamente"
+          }
+        },
+        {
+          "name": "Status Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response time is less than 1000ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/status_check",
+              "host": ["{{baseUrl}}"],
+              "path": ["status_check"]
+            },
+            "description": "Verifica o status detalhado da aplicação"
+          }
+        }
+      ],
+      "description": "Endpoints para verificar o status e saúde da aplicação"
+    },
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "GitHub OAuth - Initiate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/github",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "github"]
+            },
+            "description": "Inicia o fluxo de autenticação OAuth com GitHub\n\n⚠️ **Nota:** Este endpoint redirecionará para o GitHub. Use em um navegador para completar o fluxo."
+          }
+        },
+        {
+          "name": "GitHub OAuth - Callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/github/callback?code={{oauth_code}}&state={{oauth_state}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "github", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "{{oauth_code}}",
+                  "description": "Código de autorização retornado pelo GitHub"
+                },
+                {
+                  "key": "state",
+                  "value": "{{oauth_state}}",
+                  "description": "Estado para validação de segurança"
+                }
+              ]
+            },
+            "description": "Endpoint de callback do GitHub OAuth\n\n✅ **Automático:** Este endpoint é chamado automaticamente pelo GitHub após autorização."
+          }
+        },
+        {
+          "name": "Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User data is returned', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('username');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Retorna informações do usuário logado"
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Clear token after logout",
+                  "pm.environment.unset('auth_token');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Realiza logout do usuário (invalida token)"
+          }
+        },
+        {
+          "name": "Auth Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Auth test successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "    pm.expect(jsonData.message).to.include('autenticado');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "test"]
+            },
+            "description": "Testa se a autenticação está funcionando"
+          }
+        }
+      ],
+      "description": "Sistema completo de autenticação OAuth com GitHub"
+    },
+    {
+      "name": "📊 Dashboard",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Stats data is complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('total_forms');",
+                  "    pm.expect(jsonData).to.have.property('total_responses');",
+                  "    pm.expect(jsonData).to.have.property('active_forms');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "stats"]
+            },
+            "description": "Retorna estatísticas resumidas do dashboard:\n- Total de formulários\n- Total de respostas\n- Formulários ativos\n- Métricas de performance"
+          }
+        },
+        {
+          "name": "User Forms List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Forms list is array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Save first form ID for later use",
+                  "if (pm.response.json().length > 0) {",
+                  "    pm.environment.set('form_id', pm.response.json()[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/forms",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "forms"]
+            },
+            "description": "Lista todos os formulários do usuário com informações resumidas"
+          }
+        },
+        {
+          "name": "Dashboard Analytics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Analytics data is complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('responses_by_form');",
+                  "    pm.expect(jsonData).to.have.property('forms_by_status');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/analytics",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "analytics"]
+            },
+            "description": "Dados para gráficos e visualizações do dashboard"
+          }
+        },
+        {
+          "name": "Recent Activity",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Activity data structure', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData).to.have.property('activities');",
+                  "    pm.expect(jsonData.activities).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/recent-activity",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "recent-activity"]
+            },
+            "description": "Lista as atividades recentes do usuário"
+          }
+        }
+      ],
+      "description": "Endpoints do dashboard com estatísticas e métricas"
+    },
+    {
+      "name": "📝 Forms Management",
+      "item": [
+        {
+          "name": "Create Form (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Form created successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('form');",
+                  "    pm.expect(jsonData.form).to.have.property('id');",
+                  "});",
+                  "",
+                  "// Save form ID for later requests",
+                  "if (pm.response.json().success) {",
+                  "    pm.environment.set('form_id', pm.response.json().form.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Pesquisa de Satisfação {{$randomInt}}\",\n  \"description\": \"Formulário para avaliar a satisfação dos clientes com nossos serviços\",\n  \"icon\": \"survey\",\n  \"folder_color\": \"blue\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forms",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms"]
+            },
+            "description": "Cria um novo formulário em modo rascunho"
+          }
+        },
+        {
+          "name": "Add Section with Questions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Section created successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('section');",
+                  "});",
+                  "",
+                  "// Save section and question IDs",
+                  "if (pm.response.json().success) {",
+                  "    pm.environment.set('section_id', pm.response.json().section.id);",
+                  "    if (pm.response.json().questions && pm.response.json().questions.length > 0) {",
+                  "        pm.environment.set('question_id', pm.response.json().questions[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dados Pessoais\",\n  \"description\": \"Informações básicas do respondente\",\n  \"order\": 1,\n  \"questions\": [\n    {\n      \"type\": \"short-text\",\n      \"title\": \"Nome completo\",\n      \"description\": \"Digite seu nome completo\",\n      \"required\": true,\n      \"options\": null,\n      \"validation\": {\n        \"min_length\": 3,\n        \"max_length\": 100\n      },\n      \"order\": 1\n    },\n    {\n      \"type\": \"email\",\n      \"title\": \"E-mail\",\n      \"description\": \"Seu melhor e-mail para contato\",\n      \"required\": true,\n      \"options\": null,\n      \"validation\": null,\n      \"order\": 2\n    },\n    {\n      \"type\": \"multiple-choice\",\n      \"title\": \"Como você nos conheceu?\",\n      \"description\": \"Selecione uma opção\",\n      \"required\": false,\n      \"options\": {\n        \"choices\": [\n          \"Redes sociais\",\n          \"Indicação de amigos\",\n          \"Busca no Google\",\n          \"Publicidade\",\n          \"Outros\"\n        ]\n      },\n      \"validation\": null,\n      \"order\": 3\n    },\n    {\n      \"type\": \"rating\",\n      \"title\": \"Como você avalia nosso atendimento?\",\n      \"description\": \"De 1 a 5 estrelas\",\n      \"required\": true,\n      \"options\": {\n        \"scale\": 5,\n        \"labels\": {\n          \"1\": \"Muito ruim\",\n          \"5\": \"Excelente\"\n        }\n      },\n      \"validation\": null,\n      \"order\": 4\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/sections",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "sections"]
+            },
+            "description": "Adiciona uma seção com perguntas ao formulário"
+          }
+        },
+        {
+          "name": "Update Section",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Section updated successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dados Pessoais - Atualizado\",\n  \"description\": \"Informações básicas do respondente (versão atualizada)\",\n  \"order\": 1,\n  \"questions\": [\n    {\n      \"id\": \"{{questionId}}\",\n      \"type\": \"short-text\",\n      \"title\": \"Nome completo\",\n      \"description\": \"Digite seu nome completo\",\n      \"required\": true,\n      \"options\": null,\n      \"validation\": {\n        \"min_length\": 3,\n        \"max_length\": 100\n      },\n      \"order\": 1\n    },\n    {\n      \"type\": \"phone\",\n      \"title\": \"Telefone\",\n      \"description\": \"Número de telefone com DDD\",\n      \"required\": false,\n      \"options\": null,\n      \"validation\": {\n        \"pattern\": \"^\\\\([0-9]{2}\\\\) [0-9]{4,5}-[0-9]{4}$\"\n      },\n      \"order\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sections/{{sectionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sections", "{{sectionId}}"]
+            },
+            "description": "Atualiza uma seção existente e suas perguntas"
+          }
+        },
+        {
+          "name": "Delete Section",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Section deleted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sections/{{sectionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["sections", "{{sectionId}}"]
+            },
+            "description": "Remove uma seção e todas as suas perguntas"
+          }
+        },
+        {
+          "name": "Publish Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Form published successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('form');",
+                  "    pm.expect(jsonData.form.status).to.equal('public');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Pesquisa de Satisfação - Final\",\n  \"description\": \"Formulário completo e publicado para receber respostas\",\n  \"status\": \"public\",\n  \"sections_order\": [\"{{sectionId}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/publish",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "publish"]
+            },
+            "description": "Publica o formulário e define configurações finais"
+          }
+        },
+        {
+          "name": "Get Public Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Public form data is complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('form');",
+                  "    pm.expect(jsonData.form).to.have.property('sections');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/public",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "public"]
+            },
+            "description": "Exibe formulário público pronto para preenchimento (endpoint público)"
+          }
+        },
+        {
+          "name": "Submit Form Response",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response submitted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('session_id');",
+                  "});",
+                  "",
+                  "// Save response session ID",
+                  "if (pm.response.json().success) {",
+                  "    pm.environment.set('response_session_id', pm.response.json().session_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"respondent_email\": \"{{$randomEmail}}\",\n  \"answers\": [\n    {\n      \"question_id\": \"{{questionId}}\",\n      \"value\": [\"{{$randomFullName}}\"]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "submit"]
+            },
+            "description": "Submete respostas para um formulário público (endpoint público)"
+          }
+        }
+      ],
+      "description": "CRUD completo para gerenciamento de formulários"
+    },
+    {
+      "name": "📈 Analytics & Reports",
+      "item": [
+        {
+          "name": "Form Analytics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Analytics data is complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('analytics');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/analytics",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "analytics"]
+            },
+            "description": "Estatísticas agregadas das respostas do formulário"
+          }
+        },
+        {
+          "name": "Form Responses List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Responses list is array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Save first response session ID if exists",
+                  "if (pm.response.json().length > 0) {",
+                  "    pm.environment.set('response_session_id', pm.response.json()[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{formId}}/responses",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{formId}}", "responses"]
+            },
+            "description": "Lista todas as sessões de respostas do formulário"
+          }
+        },
+        {
+          "name": "Response Session Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response session data is complete', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success', true);",
+                  "    pm.expect(jsonData).to.have.property('session');",
+                  "    pm.expect(jsonData.session).to.have.property('responses');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/responses/{{responseSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["responses", "{{responseSessionId}}"]
+            },
+            "description": "Detalha uma sessão de resposta individual com todas as respostas"
+          }
+        }
+      ],
+      "description": "Endpoints para analytics e relatórios de formulários"
+    },
+    {
+      "name": "🧪 Test Scenarios",
+      "item": [
+        {
+          "name": "Complete Flow Test",
+          "item": [
+            {
+              "name": "1. Create Test Form",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Test Flow Form {{$timestamp}}\",\n  \"description\": \"Form created for complete flow testing\",\n  \"icon\": \"test\",\n  \"folder_color\": \"green\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/forms",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["forms"]
+                }
+              }
+            },
+            {
+              "name": "2. Add Section to Test Form",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Test Section\",\n  \"description\": \"Section for testing purposes\",\n  \"order\": 1,\n  \"questions\": [\n    {\n      \"type\": \"short-text\",\n      \"title\": \"Test Question\",\n      \"description\": \"Simple test question\",\n      \"required\": true,\n      \"options\": null,\n      \"validation\": null,\n      \"order\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/forms/{{formId}}/sections",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["forms", "{{formId}}", "sections"]
+                }
+              }
+            },
+            {
+              "name": "3. Publish Test Form",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Test Flow Form - Published\",\n  \"description\": \"Published test form\",\n  \"status\": \"public\",\n  \"sections_order\": [\"{{sectionId}}\"]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/forms/{{formId}}/publish",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["forms", "{{formId}}", "publish"]
+                }
+              }
+            },
+            {
+              "name": "4. Submit Test Response",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"respondent_email\": \"test-{{$timestamp}}@example.com\",\n  \"answers\": [\n    {\n      \"question_id\": \"{{questionId}}\",\n      \"value\": [\"Test Answer {{$timestamp}}\"]\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/forms/{{formId}}/submit",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["forms", "{{formId}}", "submit"]
+                }
+              }
+            },
+            {
+              "name": "5. Check Analytics",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/forms/{{formId}}/analytics",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["forms", "{{formId}}", "analytics"]
+                }
+              }
+            }
+          ],
+          "description": "Teste do fluxo completo: criar → adicionar seção → publicar → responder → verificar analytics"
+        }
+      ],
+      "description": "Cenários de teste automatizados para validar funcionalidades"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "// Set default baseUrl if not configured",
+          "if (!pm.environment.get('base_url')) {",
+          "    pm.environment.set('base_url', 'http://localhost:8000');",
+          "}",
+          "",
+          "// Check if token is available for protected endpoints",
+          "const protectedPaths = ['/dashboard', '/forms', '/sections', '/auth/me', '/auth/logout', '/auth/test'];",
+          "const currentPath = pm.request.url.getPath();",
+          "const isProtected = protectedPaths.some(path => currentPath.includes(path));",
+          "",
+          "if (isProtected && !pm.environment.get('auth_token')) {",
+          "    console.warn('⚠️ Este endpoint requer autenticação. Execute primeiro os endpoints de auth.');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script",
+          "// Log response time for performance monitoring",
+          "console.log(`📊 Response time: ${pm.response.responseTime}ms`);",
+          "",
+          "// Check for common error patterns",
+          "if (pm.response.code >= 400) {",
+          "    console.error(`❌ Error ${pm.response.code}: ${pm.response.status}`);",
+          "    try {",
+          "        const error = pm.response.json();",
+          "        console.error('Error details:', error);",
+          "    } catch (e) {",
+          "        console.error('Response body:', pm.response.text());",
+          "    }",
+          "}",
+          "",
+          "// Auto-extract token from auth responses",
+          "if (pm.request.url.getPath().includes('/auth/') && pm.response.json().access_token) {",
+          "    pm.environment.set('auth_token', pm.response.json().access_token);",
+          "    console.log('✅ Token saved automatically');",
+          "}"
+        ]
+      }
+    }
+  ]
+}

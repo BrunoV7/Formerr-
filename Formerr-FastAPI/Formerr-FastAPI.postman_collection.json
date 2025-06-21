@@ -1,0 +1,126 @@
+{
+  "info": {
+    "_postman_id": "formerr-api-collection-001",
+    "name": "Formerr API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Coleção de testes para a API Formerr."
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:8000/health", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["health"] }
+      }
+    },
+    {
+      "name": "Status Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:8000/status_check", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["status_check"] }
+      }
+    },
+    {
+      "name": "Criar Formulário (rascunho)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }, { "key": "Content-Type", "value": "application/json", "type": "text" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Formulário de Teste\",\n  \"description\": \"Descrição do formulário\",\n  \"icon\": \"📝\",\n  \"folder_color\": \"blue\"\n}"
+        },
+        "url": { "raw": "http://localhost:8000/forms", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms"] }
+      }
+    },
+    {
+      "name": "Criar Seção com Perguntas",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }, { "key": "Content-Type", "value": "application/json", "type": "text" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Seção 1\",\n  \"description\": \"Dados pessoais\",\n  \"order\": 1,\n  \"questions\": [\n    {\n      \"type\": \"short-text\",\n      \"title\": \"Nome completo\",\n      \"description\": null,\n      \"required\": true,\n      \"options\": null,\n      \"validation\": null,\n      \"order\": 1\n    },\n    {\n      \"type\": \"multiple-choice\",\n      \"title\": \"Cor favorita\",\n      \"description\": null,\n      \"required\": false,\n      \"options\": {\"choices\": [\"Azul\", \"Verde\", \"Vermelho\"]},\n      \"validation\": null,\n      \"order\": 2\n    }\n  ]\n}"
+        },
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/sections", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "sections"] }
+      }
+    },
+    {
+      "name": "Atualizar Seção",
+      "request": {
+        "method": "PUT",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }, { "key": "Content-Type", "value": "application/json", "type": "text" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Seção 1 Atualizada\",\n  \"description\": \"Nova descrição\",\n  \"order\": 1,\n  \"questions\": [\n    {\n      \"id\": \"{{questionId}}\",\n      \"type\": \"short-text\",\n      \"title\": \"Nome completo\",\n      \"description\": null,\n      \"required\": true,\n      \"options\": null,\n      \"validation\": null,\n      \"order\": 1\n    }\n  ]\n}"
+        },
+        "url": { "raw": "http://localhost:8000/sections/{{sectionId}}", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["sections", "{{sectionId}}"] }
+      }
+    },
+    {
+      "name": "Publicar Formulário",
+      "request": {
+        "method": "PUT",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }, { "key": "Content-Type", "value": "application/json", "type": "text" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Formulário Publicado\",\n  \"description\": \"Agora está público\",\n  \"status\": \"public\",\n  \"sections_order\": [\"{{sectionId}}\"]\n}"
+        },
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/publish", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "publish"] }
+      }
+    },
+    {
+      "name": "Exibir Formulário Público",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/public", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "public"] }
+      }
+    },
+    {
+      "name": "Submeter Respostas (Público)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"respondent_email\": \"alguem@email.com\",\n  \"answers\": [\n    {\n      \"question_id\": \"{{questionId}}\",\n      \"value\": [\"Bruno\"]\n    },\n    {\n      \"question_id\": \"{{questionId2}}\",\n      \"value\": [\"Azul\"]\n    }\n  ]\n}"
+        },
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/submit", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "submit"] }
+      }
+    },
+    {
+      "name": "Analytics do Formulário",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/analytics", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "analytics"] }
+      }
+    },
+    {
+      "name": "Listar Sessões de Respostas",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "url": { "raw": "http://localhost:8000/forms/{{formId}}/responses", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["forms", "{{formId}}", "responses"] }
+      }
+    },
+    {
+      "name": "Detalhar Sessão de Resposta",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "url": { "raw": "http://localhost:8000/responses/{{answerSessionId}}", "protocol": "http", "host": ["localhost"], "port": "8000", "path": ["responses", "{{answerSessionId}}"] }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "token", "value": "SEU_JWT_AQUI" },
+    { "key": "formId", "value": "" },
+    { "key": "sectionId", "value": "" },
+    { "key": "questionId", "value": "" },
+    { "key": "questionId2", "value": "" },
+    { "key": "answerSessionId", "value": "" }
+  ]
+} 
