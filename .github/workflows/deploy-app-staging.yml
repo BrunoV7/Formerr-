@@ -142,6 +142,19 @@ jobs:
         kubectl apply -f infrastructure/k8s/postgres-deployment.yaml
         kubectl apply -f infrastructure/k8s/backend-deployment.yaml
         kubectl apply -f infrastructure/k8s/frontend-deployment.yaml
+        
+        # Install Ingress Controller and Cert-Manager (if not already installed)
+        kubectl apply -f infrastructure/k8s/ingress-controller.yaml
+        kubectl apply -f infrastructure/k8s/cert-manager.yaml
+        
+        # Wait for cert-manager to be ready
+        echo "Waiting for cert-manager to be ready..."
+        kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s || true
+        kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=300s || true
+        kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s || true
+        
+        # Apply Staging Ingress with SSL
+        kubectl apply -f infrastructure/k8s/ingress-staging.yaml
     
     - name: Wait for deployment
       run: |
@@ -150,5 +163,12 @@ jobs:
     
     - name: Get service URLs
       run: |
-        echo "Frontend URL: $(kubectl get svc formerr-frontend-service -n formerr -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-        echo "Backend URL: $(kubectl get svc formerr-backend-service -n formerr -o jsonpath='{.spec.clusterIP}'):8000"
+        echo "🌐 STAGING URLS:"
+        echo "Frontend: https://staging.formerr.tech"
+        echo "API: https://staging-api.formerr.tech"
+        echo ""
+        echo "📋 SSL Certificate Status:"
+        kubectl describe certificate formerr-staging-tls-secret -n formerr || echo "Certificate still being issued..."
+        echo ""
+        echo "🔍 Ingress Status:"
+        kubectl get ingress formerr-staging-ingress -n formerr -o wide
