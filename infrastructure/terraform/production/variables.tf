@@ -19,13 +19,13 @@ variable "k8s_version" {
 variable "node_size" {
   description = "Size of worker nodes"
   type        = string
-  default     = "s-2vcpu-2gb"
+  default     = "s-2vcpu-4gb"
 }
 
 variable "node_count" {
   description = "Number of worker nodes"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "environment" {
