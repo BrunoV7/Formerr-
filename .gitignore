@@ -70,3 +70,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+DEPLOY_CHECKLIST.md
+DNS_CONFIG_EXAMPLE.md
+DNS_SETUP.md
+DEPLOY_CHECKLIST.md

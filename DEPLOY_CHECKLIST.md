@@ -68,31 +68,62 @@ DATABASE_URL=postgresql+asyncpg://doadmin:AVNS_mT-30-FzCSW90ggdOZm@db-postgresql
   git push origin develop
   ```
 
+### 4. DNS e SSL Setup (NOVO!)
+- **Domínio**: `formerr.tech` deve estar registrado e acessível
+- **Email**: Alterar email no `infrastructure/k8s/cert-manager.yaml`
+- **Certificados**: SSL/TLS automático via Let's Encrypt
+- **Subdomínios necessários**:
+  - `formerr.tech` → Frontend Produção
+  - `www.formerr.tech` → Frontend Produção  
+  - `api.formerr.tech` → Backend Produção
+  - `staging.formerr.tech` → Frontend Staging
+  - `staging-api.formerr.tech` → Backend Staging
+
+📘 **Guia detalhado**: Ver arquivo `DNS_SETUP.md`
+
 ## 🚀 Deploy Steps
 
 ### Passo 1: Deploy Completo Staging
 1. Push código para branch `develop`
 2. Verificar execução da pipeline `deploy-app-staging.yml` que:
    - ✅ Cria infraestrutura (cluster K8s + monitoramento)
+   - ✅ Instala Ingress Controller + Cert-Manager
    - ✅ Builda e publica aplicação
-   - ✅ Deploya tudo no cluster staging
+   - ✅ Deploya tudo no cluster staging com SSL
 3. Aguardar ~15-20 min para conclusão completa
-4. Anotar IPs do Load Balancer nos logs
+4. **NOVO**: Anotar IP do Ingress Load Balancer nos logs
+5. **NOVO**: Configurar DNS staging (ver `DNS_SETUP.md`)
 
 ### Passo 2: Deploy Completo Produção  
 1. Merge `develop` → `main`
 2. Verificar execução da pipeline `deploy-app-prod.yml` que:
    - ✅ Cria infraestrutura (cluster K8s + monitoramento)
+   - ✅ Instala Ingress Controller + Cert-Manager
    - ✅ Builda e publica aplicação  
-   - ✅ Deploya tudo no cluster produção
+   - ✅ Deploya tudo no cluster produção com SSL
 3. Aguardar ~15-20 min para conclusão completa
-4. Anotar IPs do Load Balancer nos logs
+4. **NOVO**: Anotar IP do Ingress Load Balancer nos logs
+5. **NOVO**: Configurar DNS produção (ver `DNS_SETUP.md`)
+6. **NOVO**: Aguardar propagação DNS (15-60 min)
+7. **NOVO**: Verificar certificados SSL automáticos
 
 **🎯 Agora com qualquer commit, se o professor deletar tudo da Digital Ocean, um novo push vai recriar TUDO automaticamente!**
 
 ## 🔍 Verificações
 
-### Aplicação Funcionando
+### Aplicação Funcionando (URLs NOVAS!)
+```bash
+# Staging
+curl -I https://staging.formerr.tech
+curl -I https://staging-api.formerr.tech/health
+
+# Produção  
+curl -I https://formerr.tech
+curl -I https://www.formerr.tech
+curl -I https://api.formerr.tech/health
+```
+
+### Aplicação Funcionando (IPs - Backup)
 - [ ] Frontend carrega em staging: `http://<STAGING_IP>`
 - [ ] Frontend carrega em produção: `http://<PROD_IP>`
 - [ ] Backend responde health check

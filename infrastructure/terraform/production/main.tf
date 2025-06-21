@@ -96,14 +96,6 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
     target_port     = 80
   }
 
-  forwarding_rule {
-    entry_protocol  = "https"
-    entry_port      = 443
-    target_protocol = "http"
-    target_port     = 80
-    tls_passthrough = false
-  }
-
   healthcheck {
     protocol = "http"
     port     = 80
