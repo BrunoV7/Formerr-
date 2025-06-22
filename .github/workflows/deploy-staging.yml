@@ -92,11 +92,35 @@ jobs:
     - name: Build and Push Backend Image
       run: |
         # Get registry endpoint from Terraform output
-        cd infrastructure/digitalocean-staging
-        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        REGISTRY_ENDPOINT=$(cd infrastructure/digitalocean-staging && terraform output -raw registry_endpoint)
         
         # Log in to DigitalOcean Container Registry
         doctl registry login
+        
+        # Build backend image (from repo root)
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:staging-${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-backend:staging-latest \
+          ./Formerr-FastAPI
+        
+        # Push backend image
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:staging-${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:staging-latest
+
+    # Build and Push Frontend
+    - name: Build and Push Frontend Image
+      run: |
+        # Get registry endpoint from Terraform output
+        REGISTRY_ENDPOINT=$(cd infrastructure/digitalocean-staging && terraform output -raw registry_endpoint)
+        
+        # Build frontend image (from repo root)
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:staging-${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-frontend:staging-latest \
+          --build-arg NEXT_PUBLIC_API_URL=https://api-staging.formerr.example.com \
+          ./formerr-frontend
+        
+        # Push frontend image
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:staging-${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:staging-latest
         
         # Build backend image
         docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \

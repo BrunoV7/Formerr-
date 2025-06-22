@@ -108,13 +108,12 @@ jobs:
     - name: Build and Push Backend Image
       run: |
         # Get registry name from Terraform output
-        cd infrastructure/digitalocean-production
-        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        REGISTRY_ENDPOINT=$(cd infrastructure/digitalocean-production && terraform output -raw registry_endpoint)
         
         # Log in to DigitalOcean Container Registry
         doctl registry login
         
-        # Build backend image
+        # Build backend image (from repo root)
         docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \
           -t ${REGISTRY_ENDPOINT}/formerr-backend:latest \
           ./Formerr-FastAPI
@@ -127,10 +126,9 @@ jobs:
     - name: Build and Push Frontend Image
       run: |
         # Get registry name from Terraform output
-        cd infrastructure/digitalocean-production
-        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        REGISTRY_ENDPOINT=$(cd infrastructure/digitalocean-production && terraform output -raw registry_endpoint)
         
-        # Build frontend image
+        # Build frontend image (from repo root)
         docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
           -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
           --build-arg NEXT_PUBLIC_API_URL=https://api.formerr.example.com \
