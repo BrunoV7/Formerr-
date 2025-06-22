@@ -270,27 +270,34 @@ jobs:
     # Deploy Monitoring
     - name: Deploy Monitoring
       run: |
-        echo "📊 Deploying Prometheus monitoring..."
+        echo "📊 Deploying Prometheus and Grafana monitoring..."
         
         # Clean up any existing Helm releases (idempotent)
         if command -v helm &> /dev/null; then
           echo "🧹 Cleaning up any existing Helm releases..."
           helm uninstall prometheus -n monitoring 2>/dev/null || true
           helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
+          helm uninstall grafana -n monitoring 2>/dev/null || true
         fi
         
-        # Deploy Prometheus using manifests
+        # Deploy Prometheus and Grafana using manifests
         kubectl apply -f k8s/monitoring/prometheus-simple.yaml
         
         # Wait for monitoring to be ready
         echo "⏳ Waiting for Prometheus deployment to be ready..."
         kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=300s
         
+        echo "⏳ Waiting for Grafana deployment to be ready..."
+        kubectl wait --for=condition=available deployment/grafana -n monitoring --timeout=300s
+        
         # Additional check: wait for pods to be ready
         echo "⏳ Waiting for Prometheus pods to be ready..."
         kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=300s
         
-        echo "✅ Prometheus monitoring deployed successfully"
+        echo "⏳ Waiting for Grafana pods to be ready..."
+        kubectl wait --for=condition=ready pod -l app=grafana -n monitoring --timeout=300s
+        
+        echo "✅ Prometheus and Grafana monitoring deployed successfully"
 
     # Wait for deployment
     - name: Wait for Deployment
@@ -347,5 +354,10 @@ jobs:
         echo "📊 Prometheus Load Balancer IP:"
         kubectl get service prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Not ready yet"
         echo ""
-        echo "� Access Prometheus:"
-        echo "   kubectl port-forward -n monitoring svc/prometheus 9090:9090"
+        echo "📈 Grafana Load Balancer IP:"
+        kubectl get service grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Not ready yet"
+        echo ""
+        echo "🔧 Access Services:"
+        echo "   Prometheus: kubectl port-forward -n monitoring svc/prometheus 9090:9090"
+        echo "   Grafana: kubectl port-forward -n monitoring svc/grafana 3000:3000"
+        echo "   Default Grafana credentials: admin/admin123"

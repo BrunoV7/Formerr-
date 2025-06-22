@@ -18,7 +18,7 @@ metadata:
   name: letsencrypt-prod
 spec:
   acme:
-    email: admin@formerr.example.com  # Change this to your email
+    email: backupnobre62@gmail.com  # Change this to your email
     server: https://acme-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
       name: letsencrypt-prod
@@ -34,7 +34,7 @@ metadata:
   name: letsencrypt-staging
 spec:
   acme:
-    email: admin@formerr.example.com  # Change this to your email
+    email: backupnobre62@gmail.com  # Change this to your email
     server: https://acme-staging-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
       name: letsencrypt-staging

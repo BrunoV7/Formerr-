@@ -11,11 +11,11 @@ metadata:
 spec:
   tls:
   - hosts:
-    - formerr.example.com
-    - api.formerr.example.com
+    - formerr.tech
+    - api.formerr.tech
     secretName: formerr-tls
   rules:
-  - host: formerr.example.com
+  - host: formerr.tech
     http:
       paths:
       - path: /(.*)
@@ -25,7 +25,7 @@ spec:
             name: formerr-frontend-service
             port:
               number: 3000
-  - host: api.formerr.example.com
+  - host: api.formerr.tech
     http:
       paths:
       - path: /(.*)
