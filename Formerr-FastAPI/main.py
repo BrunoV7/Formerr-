@@ -31,10 +31,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configurar CORS
+# Configurar CORS - usando variável de ambiente
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, especificar domínios
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,17 +85,10 @@ async def root():
     """Endpoint raiz da API"""
     return {
         "message": "Formerr API v2.0 - Fresh Start!",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
         "docs": "/docs",
         "status": "operational"
-    }
-
-@app.get("/health")
-async def health_check():
-    """Health check para monitoramento"""
-    return {
-        "status": "healthy",
-        "timestamp": "2025-01-20T10:00:00Z",
-        "version": "2.0.0"
     }
 
 @app.get("/status_check")

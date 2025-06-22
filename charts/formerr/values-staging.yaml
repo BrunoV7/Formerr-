@@ -1,0 +1,51 @@
+# Staging environment overrides
+backend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  env:
+    FRONTEND_SUCCESS_URL: "https://staging.formerr.example.com/auth/success"
+    FRONTEND_ERROR_URL: "https://staging.formerr.example.com/auth/error"
+    OAUTH_CALLBACK_URL: "https://api-staging.formerr.example.com/auth/github/callback"
+    ALLOWED_ORIGINS: "https://staging.formerr.example.com"
+
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  env:
+    NEXT_PUBLIC_API_URL: "https://api-staging.formerr.example.com"
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+  
+  hosts:
+    - host: staging.formerr.example.com
+      paths:
+        - path: /(.*)
+          pathType: Prefix
+          service: frontend
+    - host: api-staging.formerr.example.com
+      paths:
+        - path: /(.*)
+          pathType: Prefix
+          service: backend
+
+autoscaling:
+  enabled: false
+
+monitoring:
+  enabled: true

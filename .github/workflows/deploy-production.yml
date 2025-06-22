@@ -1,0 +1,197 @@
+name: Deploy to Production (DigitalOcean)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com
+  REGISTRY_NAME: formerr-production
+  CLUSTER_NAME: formerr-production-cluster
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_PROD_TOKEN }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    # Infrastructure Deployment
+    - name: Terraform Init (Production)
+      run: |
+        cd infrastructure/digitalocean-production
+        terraform init
+
+    - name: Terraform Plan (Production)
+      run: |
+        cd infrastructure/digitalocean-production
+        terraform plan \
+          -var="do_token=${{ secrets.DO_PROD_TOKEN }}" \
+          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+          -var="session_secret=${{ secrets.SESSION_SECRET }}" \
+          -var="database_url=${{ secrets.DATABASE_URL }}" \
+          -var="db_host=${{ secrets.DB_HOST }}" \
+          -var="db_port=${{ secrets.DB_PORT }}" \
+          -var="db_name=${{ secrets.DB_NAME }}" \
+          -var="db_user=${{ secrets.DB_USER }}" \
+          -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+    - name: Terraform Apply (Production)
+      run: |
+        cd infrastructure/digitalocean-production
+        terraform apply -auto-approve \
+          -var="do_token=${{ secrets.DO_PROD_TOKEN }}" \
+          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+          -var="session_secret=${{ secrets.SESSION_SECRET }}" \
+          -var="database_url=${{ secrets.DATABASE_URL }}" \
+          -var="db_host=${{ secrets.DB_HOST }}" \
+          -var="db_port=${{ secrets.DB_PORT }}" \
+          -var="db_name=${{ secrets.DB_NAME }}" \
+          -var="db_user=${{ secrets.DB_USER }}" \
+          -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+    # Configure kubectl
+    - name: Configure kubectl
+      run: |
+        doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+
+    # Install Ingress and Cert-Manager
+    - name: Install Ingress Controller and Cert-Manager
+      run: |
+        # Install NGINX Ingress Controller
+        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/do/deploy.yaml
+        
+        # Wait for ingress controller to be ready
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+        
+        # Install cert-manager
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+        
+        # Wait for cert-manager to be ready
+        kubectl wait --namespace cert-manager \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+        
+        # Apply cluster issuers
+        kubectl apply -f k8s/monitoring/ingress-cert-manager.yaml
+
+    # Build and Push Backend
+    - name: Build and Push Backend Image
+      run: |
+        # Log in to DigitalOcean Container Registry
+        doctl registry login
+        
+        # Build backend image
+        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest \
+          ./Formerr-FastAPI
+        
+        # Push backend image
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest
+
+    # Build and Push Frontend
+    - name: Build and Push Frontend Image
+      run: |
+        # Build frontend image
+        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest \
+          --build-arg NEXT_PUBLIC_API_URL=https://api.formerr.example.com \
+          ./formerr-frontend
+        
+        # Push frontend image
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest
+
+    # Deploy Application Secrets
+    - name: Deploy Application Secrets
+      run: |
+        # Create namespace if not exists
+        kubectl create namespace formerr --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Create application secrets
+        kubectl create secret generic formerr-app-secret \
+          --namespace=formerr \
+          --from-literal=GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}" \
+          --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+          --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    # Deploy Application
+    - name: Deploy Backend
+      run: |
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-backend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}|g" k8s/production/backend-deployment.yaml
+        kubectl apply -f k8s/production/backend-deployment.yaml
+
+    - name: Deploy Frontend
+      run: |
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}|g" k8s/production/frontend-deployment.yaml
+        kubectl apply -f k8s/production/frontend-deployment.yaml
+
+    # Deploy Ingress
+    - name: Deploy Ingress
+      run: |
+        kubectl apply -f k8s/production/ingress.yaml
+
+    # Wait for deployment
+    - name: Wait for Deployment
+      run: |
+        kubectl rollout status deployment/formerr-backend -n formerr --timeout=600s
+        kubectl rollout status deployment/formerr-frontend -n formerr --timeout=600s
+
+    # Validate Deployment
+    - name: Validate Deployment
+      run: |
+        # Check if pods are running
+        kubectl get pods -n formerr
+        
+        # Check services
+        kubectl get services -n formerr
+        
+        # Check ingress
+        kubectl get ingress -n formerr
+        
+        # Check backend health (internal)
+        kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health || exit 1
+        
+        echo "✅ Production deployment completed successfully!"
+
+    # Get Load Balancer IP
+    - name: Get Load Balancer Info
+      run: |
+        echo "🌐 Ingress Controller Load Balancer IP:"
+        kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+        echo ""
+        echo "📊 Grafana Load Balancer IP:"
+        kubectl get service prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"
+        echo ""
+        echo "🔍 Prometheus Load Balancer IP:"
+        kubectl get service prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"

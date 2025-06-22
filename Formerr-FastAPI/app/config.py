@@ -73,13 +73,19 @@ class Settings:
     
     # Domínios permitidos para acessar a API
     # Em produção, especifique apenas os domínios necessários
-    ALLOWED_ORIGINS: list = [
-        "http://localhost:3000",    # React dev
-        "http://localhost:5173",    # Vite dev
-        "http://localhost:4173",    # Vite preview
-        "http://localhost:8080",    # Vue dev
-        # Adicione seus domínios de produção aqui
-    ]
+    # Pode ser configurado via variável de ambiente ALLOWED_ORIGINS (separado por vírgula)
+    @property
+    def ALLOWED_ORIGINS(self) -> list:
+        origins_env = os.getenv("ALLOWED_ORIGINS")
+        if origins_env:
+            return origins_env.split(",")
+        return [
+            "http://localhost:3000",    # React dev
+            "http://localhost:5173",    # Vite dev
+            "http://localhost:4173",    # Vite preview
+            "http://localhost:8080",    # Vue dev
+            # Adicione seus domínios de produção aqui
+        ]
     
     # ==========================================
     # URLs DE REDIRECIONAMENTO

@@ -1,0 +1,18 @@
+# DigitalOcean Configuration
+do_token = "your-digitalocean-api-token"
+region = "ams3"  # Different region from production
+
+# Kubernetes Configuration
+k8s_version = "1.28.2-do.0"
+node_count = 2  # Smaller for staging
+
+# Environment
+environment = "staging"
+
+# GitHub OAuth Configuration
+github_client_id = "your-github-client-id"
+github_client_secret = "your-github-client-secret"
+
+# Security
+jwt_secret = "your-jwt-secret-key-here"
+session_secret = "your-session-secret-key-here"

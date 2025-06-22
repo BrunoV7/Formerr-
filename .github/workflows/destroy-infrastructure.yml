@@ -1,0 +1,51 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      confirm:
+        description: 'Type "DESTROY" to confirm'
+        required: true
+        type: string
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'DESTROY'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ github.event.inputs.environment == 'production' && secrets.DO_PROD_TOKEN || secrets.DO_STAGING_TOKEN }}
+
+    - name: Terraform Destroy
+      run: |
+        cd infrastructure/digitalocean-${{ github.event.inputs.environment }}
+        terraform init
+        terraform destroy -auto-approve \
+          -var="do_token=${{ github.event.inputs.environment == 'production' && secrets.DO_PROD_TOKEN || secrets.DO_STAGING_TOKEN }}" \
+          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+          -var="session_secret=${{ secrets.SESSION_SECRET }}"
+
+    - name: Notify Destruction
+      run: |
+        echo "🗑️ ${{ github.event.inputs.environment }} infrastructure has been destroyed!"

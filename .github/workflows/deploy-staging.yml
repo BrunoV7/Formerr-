@@ -1,0 +1,228 @@
+name: Deploy to Staging (DigitalOcean)
+
+on:
+  push:
+    branches: [develop, staging]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com
+  REGISTRY_NAME: formerr-staging
+  CLUSTER_NAME: formerr-staging-cluster
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_STAGING_TOKEN }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    # Infrastructure Deployment
+    - name: Terraform Init (Staging)
+      run: |
+        cd infrastructure/digitalocean-staging
+        terraform init
+
+    - name: Terraform Plan (Staging)
+      run: |
+        cd infrastructure/digitalocean-staging
+        terraform plan \
+          -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
+          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+          -var="session_secret=${{ secrets.SESSION_SECRET }}"
+
+    - name: Terraform Apply (Staging)
+      run: |
+        cd infrastructure/digitalocean-staging
+        terraform apply -auto-approve \
+          -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
+          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+          -var="session_secret=${{ secrets.SESSION_SECRET }}"
+
+    # Configure kubectl
+    - name: Configure kubectl
+      run: |
+        doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+
+    # Install Ingress and Cert-Manager
+    - name: Install Ingress Controller and Cert-Manager
+      run: |
+        # Install NGINX Ingress Controller
+        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/do/deploy.yaml
+        
+        # Wait for ingress controller to be ready
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+        
+        # Install cert-manager
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+        
+        # Wait for cert-manager to be ready
+        kubectl wait --namespace cert-manager \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+        
+        # Apply cluster issuers
+        kubectl apply -f k8s/monitoring/ingress-cert-manager.yaml
+
+    # Build and Push Backend
+    - name: Build and Push Backend Image
+      run: |
+        # Log in to DigitalOcean Container Registry
+        doctl registry login
+        
+        # Build backend image
+        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest \
+          ./Formerr-FastAPI
+        
+        # Push backend image
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest
+
+    # Build and Push Frontend
+    - name: Build and Push Frontend Image
+      run: |
+        # Build frontend image
+        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest \
+          --build-arg NEXT_PUBLIC_API_URL=https://api-staging.formerr.example.com \
+          ./formerr-frontend
+        
+        # Push frontend image
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}
+        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest
+
+    # Deploy PostgreSQL Database
+    - name: Deploy PostgreSQL Database
+      run: |
+        # Create namespace if not exists
+        kubectl create namespace formerr --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Generate random passwords for PostgreSQL
+        POSTGRES_PASSWORD=$(openssl rand -base64 32)
+        FORMERR_USER_PASSWORD=$(openssl rand -base64 32)
+        
+        # Create PostgreSQL secrets
+        kubectl create secret generic postgres-secret \
+          --namespace=formerr \
+          --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+          --from-literal=FORMERR_USER_PASSWORD="$FORMERR_USER_PASSWORD" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Deploy PostgreSQL
+        kubectl apply -f k8s/staging/postgresql.yaml
+        
+        # Wait for PostgreSQL to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment/postgresql -n formerr
+        
+        # Create database connection secret for the application
+        kubectl create secret generic formerr-db-secret \
+          --namespace=formerr \
+          --from-literal=DATABASE_URL="postgresql://formerr_user:$FORMERR_USER_PASSWORD@postgresql.formerr.svc.cluster.local:5432/formerr_db" \
+          --from-literal=DB_HOST="postgresql.formerr.svc.cluster.local" \
+          --from-literal=DB_PORT="5432" \
+          --from-literal=DB_NAME="formerr_db" \
+          --from-literal=DB_USER="formerr_user" \
+          --from-literal=DB_PASSWORD="$FORMERR_USER_PASSWORD" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy Application Secrets
+      run: |
+        # Create application secrets (namespace already exists from previous step)
+        kubectl create secret generic formerr-app-secret \
+          --namespace=formerr \
+          --from-literal=GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}" \
+          --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+          --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    # Deploy Application
+    - name: Deploy Backend
+      run: |
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-backend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}|g" k8s/staging/backend-deployment.yaml
+        kubectl apply -f k8s/staging/backend-deployment.yaml
+
+    - name: Deploy Frontend
+      run: |
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-frontend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}|g" k8s/staging/frontend-deployment.yaml
+        kubectl apply -f k8s/staging/frontend-deployment.yaml
+
+    # Deploy Ingress
+    - name: Deploy Ingress
+      run: |
+        kubectl apply -f k8s/staging/ingress.yaml
+
+    # Wait for deployment
+    - name: Wait for Deployment
+      run: |
+        kubectl rollout status deployment/formerr-backend -n formerr --timeout=600s
+        kubectl rollout status deployment/formerr-frontend -n formerr --timeout=600s
+
+    # Run Integration Tests
+    - name: Run Integration Tests
+      run: |
+        # Wait a bit for services to be fully ready
+        sleep 30
+        
+        # Check if pods are running
+        kubectl get pods -n formerr
+        
+        # Check services
+        kubectl get services -n formerr
+        
+        # Check ingress
+        kubectl get ingress -n formerr
+        
+        # Check backend health (internal)
+        kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health || exit 1
+        
+        echo "✅ Staging deployment completed successfully!"
+
+    # Get Load Balancer Info
+    - name: Get Load Balancer Info
+      run: |
+        echo "🌐 Ingress Controller Load Balancer IP:"
+        kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+        echo ""
+        echo "📊 Grafana Load Balancer IP:"
+        kubectl get service prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"
+        echo ""
+        echo "🔍 Prometheus Load Balancer IP:"
+        kubectl get service prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"
+
+    # Notify on Success
+    - name: Notify Success
+      if: success()
+      run: |
+        echo "🎉 Staging environment deployed successfully!"
+        echo "📝 You can now test your changes in the staging environment."
+        echo "🚀 If everything looks good, merge to main to deploy to production."
