@@ -13,7 +13,7 @@ variable "region" {
 variable "k8s_version" {
   description = "Kubernetes version"
   type        = string
-  default     = "1.29.1-do.0"
+  default     = "1.31.1-do.3"
 }
 
 variable "node_count" {
@@ -87,4 +87,16 @@ variable "db_password" {
   description = "Database password"
   type        = string
   sensitive   = true
+}
+
+variable "registry_name" {
+  description = "Name of the container registry"
+  type        = string
+  default     = "formerr-registry"
+}
+
+variable "create_registry" {
+  description = "Whether to create a new registry or use existing one"
+  type        = bool
+  default     = false
 }

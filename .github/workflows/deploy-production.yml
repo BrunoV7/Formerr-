@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: registry.digitalocean.com
-  REGISTRY_NAME: formerr-production
+  REGISTRY_NAME: formerr-registry
   CLUSTER_NAME: formerr-production-cluster
 
 jobs:
@@ -53,7 +53,9 @@ jobs:
           -var="db_port=${{ secrets.DB_PORT }}" \
           -var="db_name=${{ secrets.DB_NAME }}" \
           -var="db_user=${{ secrets.DB_USER }}" \
-          -var="db_password=${{ secrets.DB_PASSWORD }}"
+          -var="db_password=${{ secrets.DB_PASSWORD }}" \
+          -var="registry_name=${{ env.REGISTRY_NAME }}" \
+          -var="create_registry=false"
 
     - name: Terraform Apply (Production)
       run: |
@@ -69,7 +71,9 @@ jobs:
           -var="db_port=${{ secrets.DB_PORT }}" \
           -var="db_name=${{ secrets.DB_NAME }}" \
           -var="db_user=${{ secrets.DB_USER }}" \
-          -var="db_password=${{ secrets.DB_PASSWORD }}"
+          -var="db_password=${{ secrets.DB_PASSWORD }}" \
+          -var="registry_name=${{ env.REGISTRY_NAME }}" \
+          -var="create_registry=false"
 
     # Configure kubectl
     - name: Configure kubectl

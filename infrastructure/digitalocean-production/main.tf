@@ -66,10 +66,21 @@ resource "digitalocean_kubernetes_cluster" "formerr_cluster" {
   tags = ["production", "formerr", "k8s"]
 }
 
-# Create a container registry
+# Use existing container registry or create new one
+# Note: DigitalOcean allows only one registry per account
+data "digitalocean_container_registry" "existing_registry" {
+  name = var.registry_name
+}
+
+# If registry doesn't exist, create it
 resource "digitalocean_container_registry" "formerr_registry" {
-  name                   = "formerr-production"
+  count                  = var.create_registry ? 1 : 0
+  name                   = var.registry_name
   subscription_tier_slug = "basic"
+}
+
+locals {
+  registry_name = var.create_registry ? digitalocean_container_registry.formerr_registry[0].name : data.digitalocean_container_registry.existing_registry.name
 }
 
 # Note: Using existing Digital Ocean database configured via GitHub secrets
@@ -96,8 +107,8 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
   forwarding_rule {
     entry_protocol  = "https"
     entry_port      = 443
-    target_protocol = "http"
-    target_port     = 80
+    target_protocol = "https"
+    target_port     = 443
     tls_passthrough = true
   }
 
@@ -173,7 +184,7 @@ resource "kubernetes_secret" "registry_secret" {
     ".dockerconfigjson" = jsonencode({
       auths = {
         "registry.digitalocean.com" = {
-          auth = base64encode("${digitalocean_container_registry.formerr_registry.name}:${var.do_token}")
+          auth = base64encode("${local.registry_name}:${var.do_token}")
         }
       }
     })
