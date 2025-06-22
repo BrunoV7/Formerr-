@@ -150,6 +150,7 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
 locals {
   loadbalancer_id = var.use_existing_loadbalancer ? data.digitalocean_loadbalancer.existing_lb[0].id : (length(digitalocean_loadbalancer.formerr_lb) > 0 ? digitalocean_loadbalancer.formerr_lb[0].id : null)
   loadbalancer_ip = var.use_existing_loadbalancer ? data.digitalocean_loadbalancer.existing_lb[0].ip : (length(digitalocean_loadbalancer.formerr_lb) > 0 ? digitalocean_loadbalancer.formerr_lb[0].ip : null)
+  namespace_name  = var.use_existing_namespace ? data.kubernetes_namespace.existing_namespace[0].metadata[0].name : (length(kubernetes_namespace.formerr) > 0 ? kubernetes_namespace.formerr[0].metadata[0].name : var.namespace_name)
 }
 
 # Note: Prometheus monitoring will be deployed via Kubernetes manifests
@@ -157,10 +158,11 @@ locals {
 
 # Create namespace for the application
 resource "kubernetes_namespace" "formerr" {
+  count = var.use_existing_namespace ? 0 : 1
   metadata {
-    name = "formerr"
+    name = var.namespace_name
     labels = {
-      name        = "formerr"
+      name        = var.namespace_name
       environment = "production"
     }
   }
@@ -171,11 +173,19 @@ resource "kubernetes_namespace" "formerr" {
   ]
 }
 
+# Kubernetes Namespace - Use existing or create new
+data "kubernetes_namespace" "existing_namespace" {
+  count = var.use_existing_namespace ? 1 : 0
+  metadata {
+    name = var.namespace_name
+  }
+}
+
 # Create secret for database connection (uses GitHub secrets)
 resource "kubernetes_secret" "db_secret" {
   metadata {
     name      = "formerr-db-secret"
-    namespace = kubernetes_namespace.formerr.metadata[0].name
+    namespace = local.namespace_name
   }
 
   data = {
@@ -195,7 +205,7 @@ resource "kubernetes_secret" "db_secret" {
 resource "kubernetes_secret" "registry_secret" {
   metadata {
     name      = "formerr-registry-secret"
-    namespace = kubernetes_namespace.formerr.metadata[0].name
+    namespace = local.namespace_name
   }
 
   data = {
