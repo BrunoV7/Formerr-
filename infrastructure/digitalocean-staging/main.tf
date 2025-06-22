@@ -73,8 +73,7 @@ resource "digitalocean_kubernetes_cluster" "formerr_cluster" {
 # Create a container registry
 resource "digitalocean_container_registry" "formerr_registry" {
   name                   = "formerr-staging"
-  subscription_tier_slug = "starter"
-  region                 = var.region
+  subscription_tier_slug = "basic"
 }
 
 # Note: PostgreSQL will be deployed via Kubernetes manifests in the CI/CD pipeline
@@ -98,7 +97,7 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
     entry_port      = 443
     target_protocol = "http"
     target_port     = 80
-    tls_passthrough = false
+    tls_passthrough = true
   }
 
   healthcheck {

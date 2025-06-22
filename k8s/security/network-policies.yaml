@@ -1,0 +1,95 @@
+---
+# Istio Service Mesh Installation (Optional)
+# This provides advanced traffic management, security, and observability
+# To install: kubectl apply -f https://github.com/istio/istio/releases/download/1.20.0/istio-1.20.0-linux-amd64.tar.gz
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+  labels:
+    istio-injection: disabled
+
+---
+# Network Policies for Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: formerr-backend-policy
+  namespace: formerr
+spec:
+  podSelector:
+    matchLabels:
+      app: formerr-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: formerr
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - {}  # Allow all egress for external API calls
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: formerr-frontend-policy
+  namespace: formerr
+spec:
+  podSelector:
+    matchLabels:
+      app: formerr-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: formerr
+    ports:
+    - protocol: TCP
+      port: 8000
+  - {}  # Allow external egress for CDN, etc.
+
+---
+# Pod Disruption Budgets for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: formerr-backend-pdb
+  namespace: formerr
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: formerr-backend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: formerr-frontend-pdb
+  namespace: formerr
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: formerr-frontend

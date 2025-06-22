@@ -13,7 +13,7 @@ variable "region" {
 variable "k8s_version" {
   description = "Kubernetes version"
   type        = string
-  default     = "1.28.2-do.0"
+  default     = "1.29.1-do.0"
 }
 
 variable "node_count" {

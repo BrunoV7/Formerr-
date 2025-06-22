@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: formerr-prometheus-config
+  namespace: monitoring
+  labels:
+    app: formerr-monitoring
+data:
+  prometheus-rules.yaml: |
+    groups:
+    - name: formerr.rules
+      rules:
+      # Backend Health Monitoring
+      - alert: FormerrBackendDown
+        expr: up{job="formerr-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Formerr Backend is down"
+          description: "Formerr backend has been down for more than 1 minute."
+
+      - alert: FormerrBackendHighResponseTime
+        expr: http_request_duration_seconds{job="formerr-backend",quantile="0.95"} > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Formerr Backend high response time"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Frontend Health Monitoring  
+      - alert: FormerrFrontendDown
+        expr: up{job="formerr-frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Formerr Frontend is down"
+          description: "Formerr frontend has been down for more than 1 minute."
+
+      # Database Connection Monitoring
+      - alert: FormerrDatabaseConnectionHigh
+        expr: sum(rate(database_connections_active[5m])) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connections are above 80% of capacity"
+
+      # Pod Resource Monitoring
+      - alert: FormerrHighCPUUsage
+        expr: (sum(rate(container_cpu_usage_seconds_total{namespace="formerr"}[5m])) by (pod) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage for Formerr pods"
+          description: "Pod {{ $labels.pod }} CPU usage is above 80%"
+
+      - alert: FormerrHighMemoryUsage
+        expr: (sum(container_memory_working_set_bytes{namespace="formerr"}) by (pod) / sum(container_spec_memory_limit_bytes{namespace="formerr"}) by (pod) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage for Formerr pods"
+          description: "Pod {{ $labels.pod }} memory usage is above 80%"
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: formerr-backend-metrics
+  namespace: monitoring
+  labels:
+    app: formerr-backend
+spec:
+  selector:
+    matchLabels:
+      app: formerr-backend
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+  namespaceSelector:
+    matchNames:
+    - formerr
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor  
+metadata:
+  name: formerr-frontend-metrics
+  namespace: monitoring
+  labels:
+    app: formerr-frontend
+spec:
+  selector:
+    matchLabels:
+      app: formerr-frontend
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+  namespaceSelector:
+    matchNames:
+    - formerr

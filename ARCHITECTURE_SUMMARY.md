@@ -5,47 +5,60 @@
 ### 1. Infraestrutura como Código (Terraform)
 - **📁 `infrastructure/digitalocean-production/`**
   - Cluster Kubernetes (3 nós s-2vcpu-4gb)
-  - PostgreSQL 15 gerenciado
-  - Container Registry
-  - Load Balancer
+  - Container Registry (plan básico)
+  - Load Balancer com SSL passthrough
   - VPC dedicada (10.0.0.0/16)
   - Prometheus + Grafana via Helm
+  - **🗄️ Banco de Dados**: Integração com PostgreSQL gerenciado existente via secrets do GitHub
 
 - **📁 `infrastructure/digitalocean-staging/`**
   - Cluster Kubernetes (2 nós s-2vcpu-2gb)
-  - PostgreSQL 15 gerenciado
-  - Container Registry
+  - Container Registry compartilhado
   - Load Balancer
   - VPC dedicada (10.1.0.0/16)
   - Prometheus + Grafana via Helm
+  - **🗄️ Banco de Dados**: PostgreSQL deployado dentro do cluster
 
 ### 2. Manifests Kubernetes
 - **📁 `k8s/production/`**
-  - Backend deployment (3 réplicas)
-  - Frontend deployment (3 réplicas)
+  - Backend deployment (3 réplicas com HPA)
+  - Frontend deployment (3 réplicas com HPA)
   - Services ClusterIP
   - Ingress com SSL automático
-  - Secrets para aplicação
+  - Secrets para aplicação e banco
 
 - **📁 `k8s/staging/`**
-  - Backend deployment (2 réplicas)
-  - Frontend deployment (2 réplicas)
+  - Backend deployment (2 réplicas com HPA)
+  - Frontend deployment (2 réplicas com HPA)
   - Services ClusterIP
   - Ingress com SSL automático
-  - Secrets para aplicação
+  - PostgreSQL StatefulSet
+  - Secrets gerados automaticamente
 
 - **📁 `k8s/monitoring/`**
   - NGINX Ingress Controller
-  - Cert-Manager
-  - Let's Encrypt ClusterIssuers
+  - Cert-Manager para SSL automático
+  - Application monitoring e alerts
+  - Service monitors para Prometheus
+
+- **📁 `k8s/security/`**
+  - Network Policies para isolamento
+  - Pod Disruption Budgets
+  - Security contexts
+
+- **📁 `k8s/autoscaling/`**
+  - Horizontal Pod Autoscaler (HPA)
+  - Vertical Pod Autoscaler (VPA)
+  - Resource quotas e limits
+  - KEDA para queue-based scaling
 
 ### 3. Pipelines CI/CD (GitHub Actions)
 - **🚀 `deploy-production.yml`**
   - Trigger: Push para `main`
   - Deploy completo da infraestrutura
   - Build e push das imagens
-  - Deploy no Kubernetes
-  - Validação de saúde
+  - Deploy no Kubernetes com monitoring
+  - Validação de saúde e performance
 
 - **🧪 `deploy-staging.yml`**
   - Trigger: Push para `develop/staging` ou PR para `main`
@@ -53,6 +66,7 @@
   - Build e push das imagens
   - Deploy no Kubernetes
   - Testes de integração
+  - Deploy de PostgreSQL in-cluster
 
 - **🗑️ `destroy-infrastructure.yml`**
   - Trigger: Manual com confirmação
@@ -64,6 +78,13 @@
   - Monitoramento de recursos
   - Alertas em caso de falha
 
+- **⚡ `performance-testing.yml`**
+  - Trigger: Semanal + manual
+  - Load testing com Locust
+  - Lighthouse audit para performance
+  - OWASP ZAP security scanning
+  - Relatórios de performance
+
 ### 4. Helm Charts
 - **📦 `charts/formerr/`**
   - Chart principal da aplicação
@@ -71,12 +92,31 @@
   - Configuração de autoscaling
   - Pod disruption budgets
 
-### 5. Scripts de Desenvolvimento
+### 5. Scripts e Ferramentas
 - **🛠️ `scripts/dev-setup.sh`**
   - Verificação de dependências
   - Setup do ambiente local
   - Conexão com clusters remotos
   - Deploy da infraestrutura
+
+- **🔥 `scripts/load_test.py`**
+  - Load testing com Locust
+  - Simulação de usuários reais
+  - Cenários de teste abrangentes
+  - Métricas de performance
+
+### 6. Documentação e Procedimentos
+- **📚 `DEPLOYMENT_CHECKLIST.md`**
+  - Lista completa de verificação
+  - Procedimentos de deployment
+  - Troubleshooting guide
+  - Emergency procedures
+
+- **💾 `BACKUP_DISASTER_RECOVERY.md`**
+  - Estratégias de backup
+  - Procedimentos de disaster recovery
+  - Testes mensais de DR
+  - Monitoramento de backups
 
 ## 🔧 Configuração Necessária
 

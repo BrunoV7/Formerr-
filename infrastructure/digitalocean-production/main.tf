@@ -69,15 +69,18 @@ resource "digitalocean_kubernetes_cluster" "formerr_cluster" {
 # Create a container registry
 resource "digitalocean_container_registry" "formerr_registry" {
   name                   = "formerr-production"
-  subscription_tier_slug = "starter"
-  region                 = var.region
+  subscription_tier_slug = "basic"
 }
 
 # Note: Using existing Digital Ocean database configured via GitHub secrets
 # Database connection details are provided through pipeline secrets:
 # - DATABASE_URL, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 
-# Create a LoadBalancer for external access
+# Note: LoadBalancer will be managed by NGINX Ingress Controller
+# Remove this resource if you prefer to use only Ingress
+# Keep it if you want a separate LB for direct access
+
+# Create a LoadBalancer for external access (optional)
 resource "digitalocean_loadbalancer" "formerr_lb" {
   name   = "formerr-production-lb"
   region = var.region
@@ -95,7 +98,7 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
     entry_port      = 443
     target_protocol = "http"
     target_port     = 80
-    tls_passthrough = false
+    tls_passthrough = true
   }
 
   healthcheck {

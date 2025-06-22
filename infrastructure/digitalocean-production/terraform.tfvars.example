@@ -3,7 +3,7 @@ do_token = "your-digitalocean-api-token"
 region = "nyc1"  # Options: nyc1, nyc3, ams3, sfo3, sgp1, lon1, fra1, tor1, blr1
 
 # Kubernetes Configuration
-k8s_version = "1.28.2-do.0"
+k8s_version = "1.29.1-do.0"
 node_count = 3
 
 # Environment

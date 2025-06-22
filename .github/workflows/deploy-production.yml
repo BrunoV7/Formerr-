@@ -156,6 +156,26 @@ jobs:
         sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}|g" k8s/production/frontend-deployment.yaml
         kubectl apply -f k8s/production/frontend-deployment.yaml
 
+    # Deploy Security and Monitoring
+    - name: Deploy Security Policies
+      run: |
+        kubectl apply -f k8s/security/network-policies.yaml
+
+    - name: Deploy Application Monitoring
+      run: |
+        kubectl apply -f k8s/monitoring/app-monitoring.yaml
+
+    - name: Deploy Autoscaling Configuration
+      run: |
+        # Install metrics server if not present
+        kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+        
+        # Wait for metrics server to be ready
+        kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=300s
+        
+        # Deploy HPA and resource quotas
+        kubectl apply -f k8s/autoscaling/hpa-config.yaml
+
     # Deploy Ingress
     - name: Deploy Ingress
       run: |
