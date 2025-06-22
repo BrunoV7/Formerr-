@@ -84,6 +84,8 @@ class Settings:
             "http://localhost:5173",    # Vite dev
             "http://localhost:4173",    # Vite preview
             "http://localhost:8080",    # Vue dev
+            "https://formerr.tech",     # Produção frontend
+            "https://api.formerr.tech", # Produção API (para casos de self-calls)
             # Adicione seus domínios de produção aqui
         ]
     

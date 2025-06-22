@@ -1,4 +1,4 @@
-import api from '@/lib/api'
+import api from '../lib/api'
 import axios from 'axios'
 import { User, Form, DashboardStats, FormPublic, ResponseSession, ResponseDetail, CreateFormRequest, CreateSectionRequest, SubmitFormRequest } from '@/types'
 

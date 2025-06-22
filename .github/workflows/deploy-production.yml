@@ -131,7 +131,7 @@ jobs:
         # Build frontend image (from repo root)
         docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
           -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
-          --build-arg NEXT_PUBLIC_API_URL=https://api.formerr.example.com \
+          --build-arg NEXT_PUBLIC_API_URL=https://api.formerr.tech \
           ./formerr-frontend
         
         # Push frontend image
@@ -266,6 +266,7 @@ jobs:
     - name: Deploy Ingress
       run: |
         kubectl apply -f k8s/production/ingress.yaml
+        kubectl apply -f k8s/monitoring/monitoring-ingress.yaml
 
     # Deploy Monitoring
     - name: Deploy Monitoring
@@ -345,19 +346,31 @@ jobs:
         
         echo "✅ Production deployment validation completed!"
 
-    # Get Load Balancer IP
-    - name: Get Load Balancer Info
+    # Get Access Information
+    - name: Get Access Information
       run: |
-        echo "🌐 Ingress Controller Load Balancer IP:"
-        kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+        echo "🌐 === FORMERR ACCESS INFORMATION ==="
         echo ""
-        echo "📊 Prometheus Load Balancer IP:"
-        kubectl get service prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Not ready yet"
+        echo "📱 MAIN APPLICATION:"
+        echo "   URL: https://formerr.tech"
+        echo "   Port: 443 (HTTPS)"
         echo ""
-        echo "📈 Grafana Load Balancer IP:"
-        kubectl get service grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Not ready yet"
+        echo "🔌 API BACKEND:"
+        echo "   URL: https://api.formerr.tech"
+        echo "   Port: 443 (HTTPS)"
         echo ""
-        echo "🔧 Access Services:"
-        echo "   Prometheus: kubectl port-forward -n monitoring svc/prometheus 9090:9090"
-        echo "   Grafana: kubectl port-forward -n monitoring svc/grafana 3000:3000"
-        echo "   Default Grafana credentials: admin/admin123"
+        echo "📊 MONITORING DASHBOARDS:"
+        echo "   Prometheus: https://prometheus.formerr.tech"
+        echo "   Grafana: https://grafana.formerr.tech"
+        echo "   Port: 443 (HTTPS)"
+        echo "   Auth: admin / admin123"
+        echo ""
+        echo "� Load Balancer IP:"
+        LB_IP=$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Pending...")
+        echo "   $LB_IP"
+        echo ""
+        echo "⚠️ IMPORTANT: Configure your DNS records:"
+        echo "   A    formerr.tech           -> $LB_IP"
+        echo "   A    api.formerr.tech       -> $LB_IP"
+        echo "   A    prometheus.formerr.tech -> $LB_IP"
+        echo "   A    grafana.formerr.tech   -> $LB_IP"

@@ -117,7 +117,7 @@ metadata:
   labels:
     app: prometheus
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 9090
     targetPort: 9090
@@ -299,7 +299,7 @@ metadata:
   name: grafana
   namespace: monitoring
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: grafana
   ports:

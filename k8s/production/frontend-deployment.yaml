@@ -25,7 +25,7 @@ spec:
         - containerPort: 3000
         env:
         - name: NEXT_PUBLIC_API_URL
-          value: "https://api.formerr.example.com"
+          value: "https://api.formerr.tech"
         resources:
           requests:
             memory: "256Mi"

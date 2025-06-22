@@ -50,13 +50,13 @@ spec:
               name: formerr-app-secret
               key: SESSION_SECRET
         - name: FRONTEND_SUCCESS_URL
-          value: "https://formerr.example.com/auth/success"
+          value: "https://formerr.tech/auth/success"
         - name: FRONTEND_ERROR_URL
-          value: "https://formerr.example.com/auth/error"
+          value: "https://formerr.tech/auth/error"
         - name: OAUTH_CALLBACK_URL
-          value: "https://api.formerr.example.com/auth/github/callback"
+          value: "https://api.formerr.tech/auth/github/callback"
         - name: ALLOWED_ORIGINS
-          value: "https://formerr.example.com"
+          value: "https://formerr.tech,https://api.formerr.tech"
         resources:
           requests:
             memory: "256Mi"
