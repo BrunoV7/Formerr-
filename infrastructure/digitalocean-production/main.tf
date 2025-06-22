@@ -50,16 +50,16 @@ resource "digitalocean_vpc" "formerr_vpc" {
 
 # Create the Kubernetes cluster
 resource "digitalocean_kubernetes_cluster" "formerr_cluster" {
-  name    = "formerr-production-cluster"
-  region  = var.region
-  version = var.k8s_version
+  name     = "formerr-production-cluster"
+  region   = var.region
+  version  = var.k8s_version
   vpc_uuid = digitalocean_vpc.formerr_vpc.id
 
   node_pool {
     name       = "worker-pool"
     size       = "s-2vcpu-4gb"
     node_count = var.node_count
-    
+
     tags = ["production", "formerr", "worker"]
   }
 
@@ -69,7 +69,8 @@ resource "digitalocean_kubernetes_cluster" "formerr_cluster" {
 # Use existing container registry or create new one
 # Note: DigitalOcean allows only one registry per account
 data "digitalocean_container_registry" "existing_registry" {
-  name = var.registry_name
+  count = var.create_registry ? 0 : 1
+  name  = var.registry_name
 }
 
 # If registry doesn't exist, create it
@@ -80,7 +81,8 @@ resource "digitalocean_container_registry" "formerr_registry" {
 }
 
 locals {
-  registry_name = var.create_registry ? digitalocean_container_registry.formerr_registry[0].name : data.digitalocean_container_registry.existing_registry.name
+  registry_name     = var.create_registry ? digitalocean_container_registry.formerr_registry[0].name : data.digitalocean_container_registry.existing_registry[0].name
+  registry_endpoint = var.create_registry ? digitalocean_container_registry.formerr_registry[0].endpoint : data.digitalocean_container_registry.existing_registry[0].endpoint
 }
 
 # Note: Using existing Digital Ocean database configured via GitHub secrets
@@ -93,8 +95,8 @@ locals {
 
 # Create a LoadBalancer for external access (optional)
 resource "digitalocean_loadbalancer" "formerr_lb" {
-  name   = "formerr-production-lb"
-  region = var.region
+  name     = "formerr-production-lb"
+  region   = var.region
   vpc_uuid = digitalocean_vpc.formerr_vpc.id
 
   forwarding_rule {
@@ -113,13 +115,13 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
   }
 
   healthcheck {
-    protocol               = "http"
-    port                   = 80
-    path                   = "/health"
-    check_interval_seconds = 10
+    protocol                 = "http"
+    port                     = 80
+    path                     = "/health"
+    check_interval_seconds   = 10
     response_timeout_seconds = 5
-    healthy_threshold      = 3
-    unhealthy_threshold    = 3
+    healthy_threshold        = 3
+    unhealthy_threshold      = 3
   }
 }
 
@@ -145,7 +147,7 @@ resource "kubernetes_namespace" "formerr" {
   metadata {
     name = "formerr"
     labels = {
-      name = "formerr"
+      name        = "formerr"
       environment = "production"
     }
   }

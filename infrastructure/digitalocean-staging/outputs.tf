@@ -23,12 +23,12 @@ output "cluster_name" {
 
 output "registry_endpoint" {
   description = "Container registry endpoint"
-  value       = digitalocean_container_registry.formerr_registry.endpoint
+  value       = local.registry_endpoint
 }
 
 output "registry_name" {
   description = "Container registry name"
-  value       = digitalocean_container_registry.formerr_registry.name
+  value       = local.registry_name
 }
 
 output "postgresql_host" {
