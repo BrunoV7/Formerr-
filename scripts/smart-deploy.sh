@@ -71,6 +71,7 @@ fi
 # Set environment-specific variables
 if [[ "$environment" == "production" ]]; then
     INFRA_DIR="infrastructure/digitalocean-production"
+    INFRA_DIR_FULL="$SCRIPT_DIR/../infrastructure/digitalocean-production"
     VPC_NAME="formerr-production-vpc"
     CLUSTER_NAME="formerr-production-cluster"
     LB_NAME="formerr-production-lb"
@@ -78,6 +79,7 @@ if [[ "$environment" == "production" ]]; then
     echo -e "${BLUE}🏭 Production environment selected${NC}"
 else
     INFRA_DIR="infrastructure/digitalocean-staging"
+    INFRA_DIR_FULL="$SCRIPT_DIR/../infrastructure/digitalocean-staging"
     VPC_NAME="formerr-staging-vpc"
     CLUSTER_NAME="formerr-staging-cluster"
     LB_NAME="formerr-staging-lb"
@@ -230,7 +232,7 @@ else
 fi
 
 # Navigate to infrastructure directory
-cd "$INFRA_DIR"
+cd "$INFRA_DIR_FULL"
 
 echo ""
 echo "🚀 Starting smart Terraform deployment..."
@@ -383,7 +385,7 @@ if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" 2>/dev/null; then
     echo "📊 Deploying Prometheus monitoring..."
     cd "$SCRIPT_DIR/.."
     
-    if [[ -f "k8s/monitoring/prometheus-simple.yaml" ]]; then
+    if [[ -f "$SCRIPT_DIR/../k8s/monitoring/prometheus-simple.yaml" ]]; then
         # Remove any existing Helm releases first (idempotent)
         if command -v helm &> /dev/null; then
             echo "🧹 Cleaning up any existing Helm Prometheus releases..."
@@ -392,7 +394,7 @@ if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" 2>/dev/null; then
         fi
         
         echo "📋 Applying Prometheus manifests..."
-        if kubectl apply -f k8s/monitoring/prometheus-simple.yaml; then
+        if kubectl apply -f "$SCRIPT_DIR/../k8s/monitoring/prometheus-simple.yaml"; then
             echo -e "${GREEN}✅ Prometheus monitoring deployed successfully${NC}"
             
             # Wait for Prometheus to be ready
@@ -408,10 +410,10 @@ if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" 2>/dev/null; then
             echo -e "${YELLOW}⚠️  Failed to deploy Prometheus monitoring (non-critical)${NC}"
         fi
     else
-        echo -e "${YELLOW}⚠️  Prometheus manifests not found at k8s/monitoring/prometheus-simple.yaml${NC}"
+        echo -e "${YELLOW}⚠️  Prometheus manifests not found at $SCRIPT_DIR/../k8s/monitoring/prometheus-simple.yaml${NC}"
     fi
     
-    cd "$INFRA_DIR"
+    cd "$INFRA_DIR_FULL"
 else
     echo -e "${YELLOW}⚠️  Could not configure kubectl automatically${NC}"
     echo "   Run manually: doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
