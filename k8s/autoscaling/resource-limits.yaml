@@ -1,0 +1,34 @@
+---
+# Resource Quota for the formerr namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: formerr-resource-quota
+  namespace: formerr
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "10"
+    services: "10"
+    secrets: "10"
+    configmaps: "10"
+
+---
+# Limit Range for Default Resource Constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: formerr-limit-range
+  namespace: formerr
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container
