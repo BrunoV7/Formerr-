@@ -264,7 +264,7 @@ do_token = "${!TOKEN_VAR}"
 region = "nyc1"
 
 # Kubernetes Configuration
-k8s_version = "1.31.1-do.3"
+k8s_version = "1.33.1-do.0"
 node_count = $([[ "$environment" == "production" ]] && echo "3" || echo "2")
 
 # Resource Names

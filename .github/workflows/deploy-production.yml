@@ -39,7 +39,7 @@ jobs:
     - name: Setup kubectl
       uses: azure/setup-kubectl@v3
       with:
-        version: 'v1.29.0'  # Updated to match likely cluster version
+        version: 'v1.33.0'  # Updated to match cluster version 1.33.1
 
     # Infrastructure Detection and Deployment
     - name: Detect Existing Resources and Deploy Infrastructure
