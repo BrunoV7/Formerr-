@@ -30,7 +30,7 @@ DO_STAGING_TOKEN=dop_v1_yyyyyyyyyyyyyyyyyyyy
 
 #### Configurações OAuth GitHub
 ```
-GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_ID=your_GITHUB_CLIENT_ID
 GITHUB_CLIENT_SECRET=your_github_client_secret
 ```
 

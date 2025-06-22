@@ -28,7 +28,7 @@ variable "environment" {
   default     = "production"
 }
 
-variable "github_client_id" {
+variable "GITHUB_CLIENT_ID" {
   description = "GitHub OAuth Client ID"
   type        = string
   sensitive   = true

@@ -101,7 +101,7 @@ registry_name = "$REGISTRY_NAME"
 create_registry = $([[ "$USE_EXISTING_REGISTRY" == "true" ]] && echo "false" || echo "true")
 
 # Application Secrets (use placeholder values for now)
-github_client_id = "placeholder_github_client_id"
+GITHUB_CLIENT_ID = "placeholder_GITHUB_CLIENT_ID"
 github_client_secret = "placeholder_github_client_secret"
 jwt_secret = "placeholder_jwt_secret_$(openssl rand -hex 16)"
 session_secret = "placeholder_session_secret_$(openssl rand -hex 16)"

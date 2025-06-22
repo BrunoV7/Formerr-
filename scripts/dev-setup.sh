@@ -87,7 +87,7 @@ setup_env_files() {
         cat > .env.local << EOF
 # Local Development Environment Variables
 DATABASE_URL=postgresql://formerr_user:formerr_password@localhost:5432/formerr_db
-GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_ID=your_GITHUB_CLIENT_ID
 GITHUB_CLIENT_SECRET=your_github_client_secret
 JWT_SECRET=your_jwt_secret_key_here_minimum_32_characters
 SESSION_SECRET=your_session_secret_key_here_minimum_32_characters

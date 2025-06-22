@@ -280,7 +280,7 @@ use_existing_loadbalancer = $USE_EXISTING_LB
 create_registry = $([[ "$USE_EXISTING_REGISTRY" == "true" ]] && echo "false" || echo "true")
 
 # Application Secrets (from environment variables)
-github_client_id = "$GITHUB_CLIENT_ID"
+GITHUB_CLIENT_ID = "$GITHUB_CLIENT_ID"
 github_client_secret = "$GITHUB_CLIENT_SECRET"
 jwt_secret = "$JWT_SECRET"
 session_secret = "$SESSION_SECRET"

@@ -21,12 +21,12 @@ Esta é uma coleção completa e otimizada para testar a API Formerr com todas a
 
 **Para Development:**
 - `base_url`: `http://localhost:8000` (já configurado)
-- `github_client_id`: Seu Client ID do GitHub OAuth
+- `GITHUB_CLIENT_ID`: Seu Client ID do GitHub OAuth
 - `github_client_secret`: Seu Client Secret do GitHub OAuth
 
 **Para Production:**
 - `base_url`: URL do seu servidor de produção
-- `github_client_id`: Client ID de produção
+- `GITHUB_CLIENT_ID`: Client ID de produção
 - `github_client_secret`: Client Secret de produção
 
 ### 3. Configurar GitHub OAuth

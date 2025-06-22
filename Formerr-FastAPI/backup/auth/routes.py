@@ -34,7 +34,7 @@ router = APIRouter()
 oauth = OAuth()
 oauth.register(
     name='github',
-    client_id=settings.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_ID=settings.GITHUB_CLIENT_ID,
     client_secret=settings.GITHUB_CLIENT_SECRET,
     # URLs específicas do GitHub OAuth
     authorize_url='https://github.com/login/oauth/authorize',

@@ -75,7 +75,7 @@ Crie um arquivo `.env` na raiz do projeto:
 ENVIRONMENT=development
 
 # GitHub OAuth
-GITHUB_CLIENT_ID=seu_github_client_id
+GITHUB_CLIENT_ID=seu_GITHUB_CLIENT_ID
 GITHUB_CLIENT_SECRET=seu_github_client_secret
 
 # Segurança

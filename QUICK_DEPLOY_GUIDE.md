@@ -12,8 +12,8 @@
 #### Production Secrets
 ```
 DO_TOKEN_PROD=your-production-digitalocean-token
-GITHUB_CLIENT_ID=your-github-oauth-client-id
-GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
+CLIENT_ID=your-github-oauth-client-id
+CLIENT_SECRET=your-github-oauth-client-secret
 JWT_SECRET=your-jwt-secret-key
 SESSION_SECRET=your-session-secret-key
 DATABASE_URL=your-production-database-url
@@ -27,7 +27,7 @@ DB_PASSWORD=your-db-password
 #### Staging Secrets
 ```
 DO_STAGING_TOKEN=your-staging-digitalocean-token
-# GitHub secrets are shared between environments
+# GitHub OAuth secrets (CLIENT_ID, CLIENT_SECRET) are shared between environments
 ```
 
 ## 🎯 Deployment Options

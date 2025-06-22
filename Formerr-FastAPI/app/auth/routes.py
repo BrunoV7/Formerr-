@@ -40,7 +40,7 @@ router = APIRouter()
 oauth = OAuth()
 oauth.register(
     name='github',
-    client_id=settings.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_ID=settings.GITHUB_CLIENT_ID,
     client_secret=settings.GITHUB_CLIENT_SECRET,
     # URLs específicas do GitHub OAuth
     authorize_url='https://github.com/login/oauth/authorize',
@@ -62,7 +62,7 @@ async def github_auth(request: Request):
         return {
             "error": "OAuth configuration error",
             "detail": str(e),
-            "client_id": settings.GITHUB_CLIENT_ID[:10] + "..." if settings.GITHUB_CLIENT_ID else "NOT_SET",
+            "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID[:10] + "..." if settings.GITHUB_CLIENT_ID else "NOT_SET",
             "callback_url": settings.OAUTH_CALLBACK_URL
         }
 

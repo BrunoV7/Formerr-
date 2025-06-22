@@ -39,11 +39,11 @@ Updated the script to use actual environment variables instead of placeholders:
 
 ```bash
 # OLD (causing failures)
-github_client_id = "placeholder_github_client_id"
+GITHUB_CLIENT_ID = "placeholder_GITHUB_CLIENT_ID"
 database_url = "postgresql://user:pass@host:5432/dbname"
 
 # NEW (using real values)
-github_client_id = "$GITHUB_CLIENT_ID" 
+GITHUB_CLIENT_ID = "$GITHUB_CLIENT_ID" 
 database_url = "$DATABASE_URL"
 ```
 
@@ -84,8 +84,8 @@ Added proper handling of Terraform plan exit codes:
 - name: Detect Existing Resources and Deploy Infrastructure
   run: |
     export DO_TOKEN_PROD="${{ secrets.DO_TOKEN_PROD }}"
-    export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
-    export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
+    export GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}"
+    export GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}"
     export JWT_SECRET="${{ secrets.JWT_SECRET }}"
     export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
     export DATABASE_URL="${{ secrets.DATABASE_URL }}"
@@ -98,6 +98,18 @@ Added proper handling of Terraform plan exit codes:
 ```
 
 ### Staging Deployment Updated:
+```yaml
+- name: Detect Existing Resources and Deploy Infrastructure
+  run: |
+    export DO_STAGING_TOKEN="${{ secrets.DO_STAGING_TOKEN }}"
+    export GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}"
+    export GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}"
+    export JWT_SECRET="${{ secrets.JWT_SECRET }}"
+    export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
+    export SKIP_CONFIRM=1
+    
+    ./scripts/smart-deploy.sh staging formerr-staging
+```
 ```yaml
 - name: Detect Existing Resources and Deploy Infrastructure
   run: |
@@ -135,7 +147,7 @@ Ensure all required secrets are set in your GitHub repository:
 - `DO_STAGING_TOKEN` - DigitalOcean staging token
 
 **Application Secrets (both environments):**
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` - GitHub OAuth
+- `CLIENT_ID`, `CLIENT_SECRET` - GitHub OAuth credentials
 - `JWT_SECRET`, `SESSION_SECRET` - Application secrets
 
 ### 2. Test Deployment

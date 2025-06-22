@@ -44,8 +44,8 @@ jobs:
         if [ "${{ github.event.inputs.environment }}" = "production" ]; then
           terraform destroy -auto-approve \
             -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
-            -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-            -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            -var="github_client_id=${{ secrets.CLIENT_ID }}" \
+            -var="github_client_secret=${{ secrets.CLIENT_SECRET }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="session_secret=${{ secrets.SESSION_SECRET }}" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
@@ -62,8 +62,8 @@ jobs:
         else
           terraform destroy -auto-approve \
             -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
-            -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-            -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            -var="github_client_id=${{ secrets.CLIENT_ID }}" \
+            -var="github_client_secret=${{ secrets.CLIENT_SECRET }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="session_secret=${{ secrets.SESSION_SECRET }}" \
             -var="registry_name=formerr-staging" \

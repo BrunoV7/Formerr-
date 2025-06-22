@@ -46,8 +46,8 @@ jobs:
         
         # Set environment variables for staging deployment
         export DO_STAGING_TOKEN="${{ secrets.DO_STAGING_TOKEN }}"
-        export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
-        export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
+        export GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}"
+        export GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}"
         export JWT_SECRET="${{ secrets.JWT_SECRET }}"
         export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
         export SKIP_CONFIRM=1
@@ -163,8 +163,8 @@ jobs:
         # Create application secrets (namespace already exists from previous step)
         kubectl create secret generic formerr-app-secret \
           --namespace=formerr \
-          --from-literal=GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}" \
-          --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}" \
+          --from-literal=GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}" \
+          --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}" \
           --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
           --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
           --dry-run=client -o yaml | kubectl apply -f -
