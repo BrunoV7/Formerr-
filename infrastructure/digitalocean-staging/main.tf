@@ -124,22 +124,9 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
   }
 }
 
-# Install Prometheus using Helm
-resource "helm_release" "prometheus" {
-  name       = "prometheus"
-  repository = "https://prometheus-community.github.io/helm-charts"
-  chart      = "kube-prometheus-stack"
-  namespace  = "monitoring"
-  version    = "55.5.0"
-
-  create_namespace = true
-
-  values = [
-    file("${path.module}/prometheus-values.yaml")
-  ]
-
-  depends_on = [digitalocean_kubernetes_cluster.formerr_cluster]
-}
+# Note: Prometheus monitoring will be deployed via Kubernetes manifests
+# This approach is more reliable and faster than Helm in CI/CD
+# Use: kubectl apply -f k8s/monitoring/prometheus-simple.yaml
 
 # Create namespace for the application
 resource "kubernetes_namespace" "formerr" {

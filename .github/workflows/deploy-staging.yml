@@ -197,6 +197,26 @@ jobs:
       run: |
         kubectl apply -f k8s/staging/ingress.yaml
 
+    # Deploy Monitoring
+    - name: Deploy Monitoring
+      run: |
+        echo "📊 Deploying Prometheus monitoring..."
+        
+        # Clean up any existing Helm releases (idempotent)
+        if command -v helm &> /dev/null; then
+          echo "🧹 Cleaning up any existing Helm releases..."
+          helm uninstall prometheus -n monitoring 2>/dev/null || true
+          helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
+        fi
+        
+        # Deploy Prometheus using manifests
+        kubectl apply -f k8s/monitoring/prometheus-simple.yaml
+        
+        # Wait for monitoring to be ready
+        echo "⏳ Waiting for monitoring to be ready..."
+        kubectl wait --for=condition=Ready namespace/monitoring --timeout=60s
+        kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=180s || true
+
     # Wait for deployment
     - name: Wait for Deployment
       run: |
@@ -218,6 +238,11 @@ jobs:
         # Check ingress
         kubectl get ingress -n formerr
         
+        # Check monitoring
+        echo "📊 Monitoring Status:"
+        kubectl get pods -n monitoring
+        kubectl get services -n monitoring
+        
         # Check backend health (internal)
         kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health || exit 1
         
@@ -229,11 +254,11 @@ jobs:
         echo "🌐 Ingress Controller Load Balancer IP:"
         kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
         echo ""
-        echo "📊 Grafana Load Balancer IP:"
-        kubectl get service prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"
+        echo "📊 Prometheus Load Balancer IP:"
+        kubectl get service prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Not ready yet"
         echo ""
-        echo "🔍 Prometheus Load Balancer IP:"
-        kubectl get service prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Not ready yet"
+        echo "� Access Prometheus:"
+        echo "   kubectl port-forward -n monitoring svc/prometheus 9090:9090"
 
     # Notify on Success
     - name: Notify Success

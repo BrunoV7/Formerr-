@@ -152,25 +152,8 @@ locals {
   loadbalancer_ip = var.use_existing_loadbalancer ? data.digitalocean_loadbalancer.existing_lb[0].ip : (length(digitalocean_loadbalancer.formerr_lb) > 0 ? digitalocean_loadbalancer.formerr_lb[0].ip : null)
 }
 
-# Install Prometheus using Helm
-resource "helm_release" "prometheus" {
-  name       = "prometheus"
-  repository = "https://prometheus-community.github.io/helm-charts"
-  chart      = "kube-prometheus-stack"
-  namespace  = "monitoring"
-  version    = "55.5.0"
-
-  create_namespace = true
-
-  values = [
-    file("${path.module}/prometheus-values.yaml")
-  ]
-
-  depends_on = [
-    digitalocean_kubernetes_cluster.formerr_cluster,
-    data.digitalocean_kubernetes_cluster.existing_cluster
-  ]
-}
+# Note: Prometheus monitoring will be deployed via Kubernetes manifests
+# This approach is more reliable and faster than Helm in CI/CD
 
 # Create namespace for the application
 resource "kubernetes_namespace" "formerr" {

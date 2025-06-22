@@ -158,19 +158,55 @@ doctl kubernetes cluster kubeconfig save <cluster-name>
 kubectl cluster-info
 ```
 
-### Debug Commands
+## 📊 Monitoring and Observability
 
+### Prometheus Monitoring
+The infrastructure includes automated Prometheus monitoring deployment:
+
+#### Access Prometheus
 ```bash
-# Check resource detection
-./scripts/smart-deploy.sh staging formerr-staging --dry-run
+# Via port forwarding (local access)
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+# Then visit: http://localhost:9090
 
-# View Terraform plan
-cd infrastructure/digitalocean-staging
-terraform plan
-
-# Check GitHub Actions logs
-# Go to GitHub → Actions → Select workflow run → View logs
+# Via LoadBalancer (external access)
+kubectl get svc prometheus -n monitoring
 ```
+
+#### Monitor Application Health
+- **Backend Health**: `/health` endpoint monitoring
+- **Response Time**: Alerts when > 1 second
+- **Error Rate**: Alerts when > 10%
+- **Pod Status**: Kubernetes pod health monitoring
+
+#### Manual Monitoring Deployment
+```bash
+# Deploy monitoring only
+./scripts/deploy-monitoring.sh
+
+# Or as part of full deployment
+./scripts/smart-deploy.sh production
+```
+
+#### Monitoring Validation
+```bash
+# Check monitoring status
+kubectl get pods -n monitoring
+kubectl get services -n monitoring
+
+# View Prometheus logs
+kubectl logs -n monitoring deployment/prometheus
+
+# Check targets
+# Visit Prometheus UI → Status → Targets
+```
+
+### Monitoring Features
+- ✅ **Fast Deployment**: Uses Kubernetes manifests (not Helm)
+- ✅ **Auto-Discovery**: Finds services with prometheus.io/scrape annotation
+- ✅ **Alerting Rules**: Built-in alerts for critical metrics
+- ✅ **Persistent Storage**: Metrics retained for 200 hours
+- ✅ **Security**: RBAC-enabled with proper permissions
 
 ## 🔧 Customization
 

@@ -334,6 +334,51 @@ else
     echo -e "${GREEN}✨ Auto-applying Terraform configuration (non-interactive mode)${NC}"
     terraform apply -auto-approve
 fi
+
+# Configure kubectl and deploy monitoring
+echo ""
+echo "🔧 Configuring kubectl for cluster access..."
+if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" 2>/dev/null; then
+    echo -e "${GREEN}✅ kubectl configured successfully${NC}"
+    
+    # Deploy Prometheus monitoring
+    echo ""
+    echo "📊 Deploying Prometheus monitoring..."
+    cd "$SCRIPT_DIR/.."
+    
+    if [[ -f "k8s/monitoring/prometheus-simple.yaml" ]]; then
+        # Remove any existing Helm releases first (idempotent)
+        if command -v helm &> /dev/null; then
+            echo "🧹 Cleaning up any existing Helm Prometheus releases..."
+            helm uninstall prometheus -n monitoring 2>/dev/null || true
+            helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
+        fi
+        
+        echo "📋 Applying Prometheus manifests..."
+        if kubectl apply -f k8s/monitoring/prometheus-simple.yaml; then
+            echo -e "${GREEN}✅ Prometheus monitoring deployed successfully${NC}"
+            
+            # Wait for Prometheus to be ready
+            echo "⏳ Waiting for Prometheus to be ready..."
+            kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s 2>/dev/null || true
+            
+            # Show monitoring status
+            echo ""
+            echo "📊 Monitoring Status:"
+            kubectl get pods -n monitoring 2>/dev/null || echo "   (monitoring namespace not ready yet)"
+            kubectl get services -n monitoring 2>/dev/null || echo "   (services not ready yet)"
+        else
+            echo -e "${YELLOW}⚠️  Failed to deploy Prometheus monitoring (non-critical)${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Prometheus manifests not found at k8s/monitoring/prometheus-simple.yaml${NC}"
+    fi
+    
+    cd "$INFRA_DIR"
+else
+    echo -e "${YELLOW}⚠️  Could not configure kubectl automatically${NC}"
+    echo "   Run manually: doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
+fi
     
 echo ""
 echo -e "${GREEN}✅ Smart deployment completed successfully!${NC}"
@@ -344,9 +389,15 @@ echo "2. Push code to trigger CI/CD pipeline"
 echo "3. Monitor deployment in GitHub Actions"
 echo ""
 echo "🔗 Useful commands:"
+echo "   # Kubernetes access:"
 echo "   doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
 echo "   kubectl get pods -n formerr"
 echo "   kubectl get services -n formerr"
+echo ""
+echo "   # Monitoring access:"
+echo "   kubectl get pods -n monitoring"
+echo "   kubectl port-forward -n monitoring svc/prometheus 9090:9090"
+echo "   # Then access Prometheus at http://localhost:9090"
 
 if [[ "$USE_EXISTING_CLUSTER" == "false" ]]; then
     echo ""
