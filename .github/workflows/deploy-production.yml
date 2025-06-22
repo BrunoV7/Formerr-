@@ -150,18 +150,36 @@ jobs:
         
         echo "Cluster VPC ID: $CLUSTER_VPC_ID"
         
+        # List all databases to find the correct one
+        echo "📋 Available databases:"
+        doctl databases list
+        
+        # Get the database ID (assuming it's the only PostgreSQL database)
+        DB_ID=$(doctl databases list --output json | jq -r '.[] | select(.engine == "pg") | .id')
+        
+        if [ -z "$DB_ID" ]; then
+          echo "❌ No PostgreSQL database found"
+          exit 1
+        fi
+        
+        echo "Using database ID: $DB_ID"
+        
+        # Check current firewall rules
+        echo "📋 Current firewall rules:"
+        doctl databases firewalls list "$DB_ID" --output json
+        
         # Check if VPC is already allowed in database firewall
-        if doctl databases firewalls list db-postgresql-nyc1-67289 --output json | jq -r '.[].value' | grep -q "$CLUSTER_VPC_ID"; then
+        if doctl databases firewalls list "$DB_ID" --output json | jq -r '.[].value // empty' | grep -q "$CLUSTER_VPC_ID"; then
           echo "✅ Database already allows connections from cluster VPC"
         else
           echo "📝 Adding cluster VPC to database firewall..."
-          doctl databases firewalls append db-postgresql-nyc1-67289 --rule trusted_source:$CLUSTER_VPC_ID
+          doctl databases firewalls append "$DB_ID" --rule trusted_source:$CLUSTER_VPC_ID
           
           # Give it a moment to apply
           sleep 10
           
           # Verify the rule was added
-          if doctl databases firewalls list db-postgresql-nyc1-67289 --output json | jq -r '.[].value' | grep -q "$CLUSTER_VPC_ID"; then
+          if doctl databases firewalls list "$DB_ID" --output json | jq -r '.[].value // empty' | grep -q "$CLUSTER_VPC_ID"; then
             echo "✅ Database network access configured successfully"
           else
             echo "⚠️ Warning: Could not verify database firewall rule was added"
