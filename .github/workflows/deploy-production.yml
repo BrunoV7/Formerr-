@@ -28,10 +28,18 @@ jobs:
       with:
         token: ${{ secrets.DO_TOKEN_PROD }}
 
+    # Get available Kubernetes versions first
+    - name: Get Available Kubernetes Versions
+      run: |
+        echo "Available Kubernetes versions:"
+        doctl kubernetes options versions
+        echo "Latest version:"
+        doctl kubernetes options versions --output json | jq -r '.[0].slug'
+
     - name: Setup kubectl
       uses: azure/setup-kubectl@v3
       with:
-        version: 'v1.28.0'
+        version: 'v1.29.0'  # Updated to match likely cluster version
 
     # Infrastructure Detection and Deployment
     - name: Detect Existing Resources and Deploy Infrastructure
@@ -65,13 +73,18 @@ jobs:
         # Get cluster name from Terraform output
         cd infrastructure/digitalocean-production
         CLUSTER_NAME=$(terraform output -raw cluster_name)
+        echo "Configuring kubectl for cluster: $CLUSTER_NAME"
         doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
+        
+        # Verify cluster connection
+        kubectl cluster-info
+        kubectl get nodes
 
     # Install Ingress and Cert-Manager
     - name: Install Ingress Controller and Cert-Manager
       run: |
-        # Install NGINX Ingress Controller
-        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/do/deploy.yaml
+        # Install NGINX Ingress Controller (updated version)
+        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.4/deploy/static/provider/do/deploy.yaml
         
         # Wait for ingress controller to be ready
         kubectl wait --namespace ingress-nginx \
@@ -79,8 +92,8 @@ jobs:
           --selector=app.kubernetes.io/component=controller \
           --timeout=300s
         
-        # Install cert-manager
-        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+        # Install cert-manager (updated version)
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.2/cert-manager.yaml
         
         # Wait for cert-manager to be ready
         kubectl wait --namespace cert-manager \
