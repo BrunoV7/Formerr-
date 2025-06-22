@@ -20,7 +20,7 @@ jobs:
     - name: Install doctl
       uses: digitalocean/action-doctl@v2
       with:
-        token: ${{ matrix.environment == 'production' && secrets.DO_PROD_TOKEN || secrets.DO_STAGING_TOKEN }}
+        token: ${{ matrix.environment == 'production' && secrets.DO_TOKEN_PROD || secrets.DO_STAGING_TOKEN }}
 
     - name: Setup kubectl
       uses: azure/setup-kubectl@v3

@@ -82,7 +82,7 @@
 
 ### Secrets do GitHub (Repository Settings > Secrets)
 ```
-DO_PROD_TOKEN=dop_v1_xxxxxxxxxxxxxxxx
+DO_TOKEN_PROD=dop_v1_xxxxxxxxxxxxxxxx
 DO_STAGING_TOKEN=dop_v1_yyyyyyyyyyyy
 GITHUB_CLIENT_ID=your_github_app_id
 GITHUB_CLIENT_SECRET=your_github_app_secret

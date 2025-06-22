@@ -33,14 +33,14 @@ jobs:
     - name: Install doctl
       uses: digitalocean/action-doctl@v2
       with:
-        token: ${{ github.event.inputs.environment == 'production' && secrets.DO_PROD_TOKEN || secrets.DO_STAGING_TOKEN }}
+        token: ${{ github.event.inputs.environment == 'production' && secrets.DO_TOKEN_PROD || secrets.DO_STAGING_TOKEN }}
 
     - name: Terraform Destroy
       run: |
         cd infrastructure/digitalocean-${{ github.event.inputs.environment }}
         terraform init
         terraform destroy -auto-approve \
-          -var="do_token=${{ github.event.inputs.environment == 'production' && secrets.DO_PROD_TOKEN || secrets.DO_STAGING_TOKEN }}" \
+          -var="do_token=${{ github.event.inputs.environment == 'production' && secrets.DO_TOKEN_PROD || secrets.DO_STAGING_TOKEN }}" \
           -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
           -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
           -var="jwt_secret=${{ secrets.JWT_SECRET }}" \

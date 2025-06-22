@@ -26,7 +26,7 @@ jobs:
     - name: Install doctl
       uses: digitalocean/action-doctl@v2
       with:
-        token: ${{ secrets.DO_PROD_TOKEN }}
+        token: ${{ secrets.DO_TOKEN_PROD }}
 
     - name: Setup kubectl
       uses: azure/setup-kubectl@v3
@@ -43,7 +43,7 @@ jobs:
       run: |
         cd infrastructure/digitalocean-production
         terraform plan \
-          -var="do_token=${{ secrets.DO_PROD_TOKEN }}" \
+          -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
           -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
           -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
           -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
@@ -59,7 +59,7 @@ jobs:
       run: |
         cd infrastructure/digitalocean-production
         terraform apply -auto-approve \
-          -var="do_token=${{ secrets.DO_PROD_TOKEN }}" \
+          -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
           -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
           -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
           -var="jwt_secret=${{ secrets.JWT_SECRET }}" \

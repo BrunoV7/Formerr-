@@ -24,7 +24,7 @@ Acesse o repositório no GitHub e vá em **Settings > Secrets and variables > Ac
 
 #### Tokens de Acesso Digital Ocean
 ```
-DO_PROD_TOKEN=dop_v1_xxxxxxxxxxxxxxxxxxxx
+DO_TOKEN_PROD=dop_v1_xxxxxxxxxxxxxxxxxxxx
 DO_STAGING_TOKEN=dop_v1_yyyyyyyyyyyyyyyyyyyy
 ```
 
