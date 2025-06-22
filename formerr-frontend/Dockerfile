@@ -24,6 +24,9 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Debug: List the src directory structure to verify files are copied
+RUN echo "Listing src directory structure:" && find src -type f -name "*.ts" -o -name "*.tsx" | head -20
+
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
