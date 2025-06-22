@@ -35,36 +35,33 @@ jobs:
       with:
         version: 'v1.28.0'
 
-    # Infrastructure Deployment
-    - name: Terraform Init (Staging)
+    # Infrastructure Detection and Deployment
+    - name: Detect Existing Resources and Deploy Infrastructure
       run: |
-        cd infrastructure/digitalocean-staging
-        terraform init
-
-    - name: Terraform Plan (Staging)
-      run: |
-        cd infrastructure/digitalocean-staging
-        terraform plan \
-          -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
-          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
-          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-          -var="session_secret=${{ secrets.SESSION_SECRET }}"
-
-    - name: Terraform Apply (Staging)
-      run: |
-        cd infrastructure/digitalocean-staging
-        terraform apply -auto-approve \
-          -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
-          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
-          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-          -var="session_secret=${{ secrets.SESSION_SECRET }}"
+        # Make scripts executable
+        chmod +x scripts/smart-deploy.sh scripts/validate-terraform.sh scripts/update-staging.sh
+        
+        # Validate Terraform configuration first
+        ./scripts/validate-terraform.sh
+        
+        # Set environment variables for staging deployment
+        export DO_TOKEN="${{ secrets.DO_STAGING_TOKEN }}"
+        export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
+        export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
+        export JWT_SECRET="${{ secrets.JWT_SECRET }}"
+        export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
+        
+        # Update staging configuration and run smart deployment
+        ./scripts/update-staging.sh
+        ./scripts/smart-deploy.sh staging "${{ env.REGISTRY_NAME }}"
 
     # Configure kubectl
-    - name: Configure kubectl
+    - name: Configure kubectl for Staging Cluster
       run: |
-        doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+        # Get cluster name from Terraform output
+        cd infrastructure/digitalocean-staging
+        CLUSTER_NAME=$(terraform output -raw cluster_name)
+        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
 
     # Install Ingress and Cert-Manager
     - name: Install Ingress Controller and Cert-Manager
@@ -93,30 +90,38 @@ jobs:
     # Build and Push Backend
     - name: Build and Push Backend Image
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-staging
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        
         # Log in to DigitalOcean Container Registry
         doctl registry login
         
         # Build backend image
-        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-backend:latest \
           ./Formerr-FastAPI
         
         # Push backend image
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:latest
 
     # Build and Push Frontend
     - name: Build and Push Frontend Image
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-staging
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        
         # Build frontend image
-        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
           --build-arg NEXT_PUBLIC_API_URL=https://api-staging.formerr.example.com \
           ./formerr-frontend
         
         # Push frontend image
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:latest
 
     # Deploy PostgreSQL Database
     - name: Deploy PostgreSQL Database
@@ -166,14 +171,24 @@ jobs:
     # Deploy Application
     - name: Deploy Backend
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-staging
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        cd ../..
+        
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-backend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}|g" k8s/staging/backend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-backend:latest|${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}|g" k8s/staging/backend-deployment.yaml
         kubectl apply -f k8s/staging/backend-deployment.yaml
 
     - name: Deploy Frontend
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-staging
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        cd ../..
+        
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-frontend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}|g" k8s/staging/frontend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr-staging/formerr-frontend:latest|${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}|g" k8s/staging/frontend-deployment.yaml
         kubectl apply -f k8s/staging/frontend-deployment.yaml
 
     # Deploy Ingress

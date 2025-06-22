@@ -100,3 +100,40 @@ variable "create_registry" {
   type        = bool
   default     = false
 }
+
+# Infrastructure existence checks
+variable "vpc_name" {
+  description = "Name of the VPC to create or use existing"
+  type        = string
+  default     = "formerr-production-vpc"
+}
+
+variable "use_existing_vpc" {
+  description = "Whether to use an existing VPC instead of creating new one"
+  type        = bool
+  default     = false
+}
+
+variable "cluster_name" {
+  description = "Name of the Kubernetes cluster"
+  type        = string
+  default     = "formerr-production-cluster"
+}
+
+variable "use_existing_cluster" {
+  description = "Whether to use an existing Kubernetes cluster"
+  type        = bool
+  default     = false
+}
+
+variable "loadbalancer_name" {
+  description = "Name of the load balancer"
+  type        = string
+  default     = "formerr-production-lb"
+}
+
+variable "use_existing_loadbalancer" {
+  description = "Whether to use an existing load balancer"
+  type        = bool
+  default     = false
+}

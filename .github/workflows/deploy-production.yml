@@ -33,52 +33,38 @@ jobs:
       with:
         version: 'v1.28.0'
 
-    # Infrastructure Deployment
-    - name: Terraform Init (Production)
+    # Infrastructure Detection and Deployment
+    - name: Detect Existing Resources and Deploy Infrastructure
       run: |
-        cd infrastructure/digitalocean-production
-        terraform init
-
-    - name: Terraform Plan (Production)
-      run: |
-        cd infrastructure/digitalocean-production
-        terraform plan \
-          -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
-          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
-          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-          -var="session_secret=${{ secrets.SESSION_SECRET }}" \
-          -var="database_url=${{ secrets.DATABASE_URL }}" \
-          -var="db_host=${{ secrets.DB_HOST }}" \
-          -var="db_port=${{ secrets.DB_PORT }}" \
-          -var="db_name=${{ secrets.DB_NAME }}" \
-          -var="db_user=${{ secrets.DB_USER }}" \
-          -var="db_password=${{ secrets.DB_PASSWORD }}" \
-          -var="registry_name=${{ env.REGISTRY_NAME }}" \
-          -var="create_registry=false"
-
-    - name: Terraform Apply (Production)
-      run: |
-        cd infrastructure/digitalocean-production
-        terraform apply -auto-approve \
-          -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
-          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
-          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-          -var="session_secret=${{ secrets.SESSION_SECRET }}" \
-          -var="database_url=${{ secrets.DATABASE_URL }}" \
-          -var="db_host=${{ secrets.DB_HOST }}" \
-          -var="db_port=${{ secrets.DB_PORT }}" \
-          -var="db_name=${{ secrets.DB_NAME }}" \
-          -var="db_user=${{ secrets.DB_USER }}" \
-          -var="db_password=${{ secrets.DB_PASSWORD }}" \
-          -var="registry_name=${{ env.REGISTRY_NAME }}" \
-          -var="create_registry=false"
+        # Make scripts executable
+        chmod +x scripts/smart-deploy.sh scripts/validate-terraform.sh
+        
+        # Validate Terraform configuration first
+        ./scripts/validate-terraform.sh
+        
+        # Set environment variables for production deployment
+        export DO_TOKEN="${{ secrets.DO_TOKEN_PROD }}"
+        export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
+        export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
+        export JWT_SECRET="${{ secrets.JWT_SECRET }}"
+        export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
+        export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+        export DB_HOST="${{ secrets.DB_HOST }}"
+        export DB_PORT="${{ secrets.DB_PORT }}"
+        export DB_NAME="${{ secrets.DB_NAME }}"
+        export DB_USER="${{ secrets.DB_USER }}"
+        export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+        
+        # Run smart deployment for production
+        ./scripts/smart-deploy.sh production "${{ env.REGISTRY_NAME }}"
 
     # Configure kubectl
-    - name: Configure kubectl
+    - name: Configure kubectl for Production Cluster
       run: |
-        doctl kubernetes cluster kubeconfig save ${{ env.CLUSTER_NAME }}
+        # Get cluster name from Terraform output
+        cd infrastructure/digitalocean-production
+        CLUSTER_NAME=$(terraform output -raw cluster_name)
+        doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
 
     # Install Ingress and Cert-Manager
     - name: Install Ingress Controller and Cert-Manager
@@ -107,30 +93,38 @@ jobs:
     # Build and Push Backend
     - name: Build and Push Backend Image
       run: |
+        # Get registry name from Terraform output
+        cd infrastructure/digitalocean-production
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        
         # Log in to DigitalOcean Container Registry
         doctl registry login
         
         # Build backend image
-        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-backend:latest \
           ./Formerr-FastAPI
         
         # Push backend image
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:latest
 
     # Build and Push Frontend
     - name: Build and Push Frontend Image
       run: |
+        # Get registry name from Terraform output
+        cd infrastructure/digitalocean-production
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        
         # Build frontend image
-        docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }} \
-          -t ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
           --build-arg NEXT_PUBLIC_API_URL=https://api.formerr.example.com \
           ./formerr-frontend
         
         # Push frontend image
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}
-        docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:latest
 
     # Deploy Application Secrets
     - name: Deploy Application Secrets
@@ -150,14 +144,24 @@ jobs:
     # Deploy Application
     - name: Deploy Backend
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-production
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        cd ../..
+        
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-production/formerr-backend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-backend:${{ github.sha }}|g" k8s/production/backend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-backend:latest|${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}|g" k8s/production/backend-deployment.yaml
         kubectl apply -f k8s/production/backend-deployment.yaml
 
     - name: Deploy Frontend
       run: |
+        # Get registry endpoint from Terraform output
+        cd infrastructure/digitalocean-production
+        REGISTRY_ENDPOINT=$(terraform output -raw registry_endpoint)
+        cd ../..
+        
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${{ env.REGISTRY }}/${{ env.REGISTRY_NAME }}/formerr-frontend:${{ github.sha }}|g" k8s/production/frontend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}|g" k8s/production/frontend-deployment.yaml
         kubectl apply -f k8s/production/frontend-deployment.yaml
 
     # Deploy Security and Monitoring

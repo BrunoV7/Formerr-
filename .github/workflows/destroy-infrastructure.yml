@@ -39,12 +39,39 @@ jobs:
       run: |
         cd infrastructure/digitalocean-${{ github.event.inputs.environment }}
         terraform init
-        terraform destroy -auto-approve \
-          -var="do_token=${{ github.event.inputs.environment == 'production' && secrets.DO_TOKEN_PROD || secrets.DO_STAGING_TOKEN }}" \
-          -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
-          -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
-          -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-          -var="session_secret=${{ secrets.SESSION_SECRET }}"
+        
+        # Set additional variables for production environment
+        if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+          terraform destroy -auto-approve \
+            -var="do_token=${{ secrets.DO_TOKEN_PROD }}" \
+            -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+            -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="session_secret=${{ secrets.SESSION_SECRET }}" \
+            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="db_host=${{ secrets.DB_HOST }}" \
+            -var="db_port=${{ secrets.DB_PORT }}" \
+            -var="db_name=${{ secrets.DB_NAME }}" \
+            -var="db_user=${{ secrets.DB_USER }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="registry_name=formerr-registry" \
+            -var="use_existing_vpc=false" \
+            -var="use_existing_cluster=false" \
+            -var="use_existing_loadbalancer=false" \
+            -var="create_registry=false"
+        else
+          terraform destroy -auto-approve \
+            -var="do_token=${{ secrets.DO_STAGING_TOKEN }}" \
+            -var="github_client_id=${{ secrets.GITHUB_CLIENT_ID }}" \
+            -var="github_client_secret=${{ secrets.GITHUB_CLIENT_SECRET }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="session_secret=${{ secrets.SESSION_SECRET }}" \
+            -var="registry_name=formerr-staging" \
+            -var="use_existing_vpc=false" \
+            -var="use_existing_cluster=false" \
+            -var="use_existing_loadbalancer=false" \
+            -var="create_registry=false"
+        fi
 
     - name: Notify Destruction
       run: |

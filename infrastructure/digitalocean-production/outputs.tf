@@ -1,24 +1,29 @@
 output "cluster_endpoint" {
   description = "Kubernetes cluster endpoint"
-  value       = digitalocean_kubernetes_cluster.formerr_cluster.endpoint
+  value       = local.cluster_endpoint
   sensitive   = true
 }
 
 output "cluster_token" {
   description = "Kubernetes cluster token"
-  value       = digitalocean_kubernetes_cluster.formerr_cluster.kube_config[0].token
+  value       = local.cluster_token
   sensitive   = true
 }
 
 output "cluster_ca_certificate" {
   description = "Kubernetes cluster CA certificate"
-  value       = digitalocean_kubernetes_cluster.formerr_cluster.kube_config[0].cluster_ca_certificate
+  value       = local.cluster_ca_certificate
   sensitive   = true
 }
 
 output "cluster_name" {
   description = "Kubernetes cluster name"
-  value       = digitalocean_kubernetes_cluster.formerr_cluster.name
+  value       = local.cluster_name
+}
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = local.vpc_id
 }
 
 output "registry_endpoint" {
@@ -33,10 +38,5 @@ output "registry_name" {
 
 output "loadbalancer_ip" {
   description = "Load balancer IP"
-  value       = digitalocean_loadbalancer.formerr_lb.ip
-}
-
-output "vpc_id" {
-  description = "VPC ID"
-  value       = digitalocean_vpc.formerr_vpc.id
+  value       = local.loadbalancer_ip
 }
