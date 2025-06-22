@@ -15,6 +15,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo -e "${BLUE}📊 Installing Simple Monitoring Stack${NC}"
 echo "===================================="
+
+# Check if monitoring stack is already installed and working
+echo ""
+echo "🔍 Checking if monitoring stack is already installed..."
+
+PROMETHEUS_DEPLOYMENT=$(kubectl get deployment prometheus -n monitoring 2>/dev/null || echo "")
+GRAFANA_DEPLOYMENT=$(kubectl get deployment grafana -n monitoring 2>/dev/null || echo "")
+
+if [[ -n "$PROMETHEUS_DEPLOYMENT" && -n "$GRAFANA_DEPLOYMENT" ]]; then
+    # Check if pods are running
+    PROMETHEUS_READY=$(kubectl get pods -n monitoring -l app=prometheus --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
+    GRAFANA_READY=$(kubectl get pods -n monitoring -l app=grafana --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
+    
+    if [[ "$PROMETHEUS_READY" -gt 0 && "$GRAFANA_READY" -gt 0 ]]; then
+        echo -e "${GREEN}✅ Monitoring stack is already installed and running${NC}"
+        echo "   Prometheus pods running: $PROMETHEUS_READY"
+        echo "   Grafana pods running: $GRAFANA_READY"
+        echo ""
+        echo "🚀 Skipping installation, monitoring stack is already operational!"
+        
+        # Show access information
+        echo ""
+        echo "🔗 Access Information:"
+        echo "   Prometheus: kubectl port-forward -n monitoring svc/prometheus 9090:9090"
+        echo "   Grafana: kubectl port-forward -n monitoring svc/grafana 3000:3000"
+        echo "   Grafana default credentials: admin/admin"
+        
+        exit 0
+    fi
+fi
+
+echo -e "${YELLOW}⚠️  Monitoring stack not found or not fully operational, proceeding with installation...${NC}"
 echo ""
 echo "This will install:"
 echo "- Prometheus for metrics collection"

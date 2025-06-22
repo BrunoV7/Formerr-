@@ -80,12 +80,22 @@ jobs:
         kubectl cluster-info
         kubectl get nodes
 
-    # Install Traefik Ingress Controller
-    - name: Install Traefik Ingress Controller with Let's Encrypt
+    # Smart Infrastructure Installation (only installs what's missing)
+    - name: Install Missing Infrastructure Components
       run: |
-        # Make script executable and run Traefik installation
-        chmod +x scripts/install-traefik.sh
-        ./scripts/install-traefik.sh
+        # Make scripts executable
+        chmod +x scripts/smart-install-infrastructure.sh
+        chmod +x scripts/clean-orphaned-webhooks.sh
+        chmod +x scripts/fix-traefik-rbac.sh
+        
+        # Clean orphaned webhooks first
+        ./scripts/clean-orphaned-webhooks.sh
+        
+        # Install missing infrastructure components
+        ./scripts/smart-install-infrastructure.sh
+        
+        # Fix Traefik RBAC if needed
+        ./scripts/fix-traefik-rbac.sh
 
     # Build and Push Backend
     - name: Build and Push Backend Image

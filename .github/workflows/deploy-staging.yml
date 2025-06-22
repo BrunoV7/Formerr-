@@ -64,12 +64,12 @@ jobs:
         CLUSTER_NAME=$(terraform output -raw cluster_name)
         doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
 
-    # Install Traefik Ingress Controller
-    - name: Install Traefik Ingress Controller with Let's Encrypt
+    # Smart Infrastructure Installation (only installs what's missing)
+    - name: Install Missing Infrastructure Components
       run: |
-        # Make script executable and run Traefik installation
-        chmod +x scripts/install-traefik.sh
-        ./scripts/install-traefik.sh
+        # Make script executable and run smart installation
+        chmod +x scripts/smart-install-infrastructure.sh
+        ./scripts/smart-install-infrastructure.sh
 
     # Build and Push Backend
     - name: Build and Push Backend Image

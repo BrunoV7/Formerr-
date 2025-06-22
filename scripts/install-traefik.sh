@@ -34,6 +34,48 @@ echo -e "${GREEN}✅ Connected to Kubernetes cluster${NC}"
 CLUSTER_INFO=$(kubectl cluster-info | head -1)
 echo "   $CLUSTER_INFO"
 
+# Check if Traefik is already installed and working
+echo ""
+echo "🔍 Checking if Traefik is already installed..."
+
+TRAEFIK_DEPLOYMENT=$(kubectl get deployment traefik -n traefik 2>/dev/null || echo "")
+TRAEFIK_SERVICE=$(kubectl get service traefik -n traefik 2>/dev/null || echo "")
+
+if [[ -n "$TRAEFIK_DEPLOYMENT" && -n "$TRAEFIK_SERVICE" ]]; then
+    # Check if Traefik pods are running
+    TRAEFIK_READY=$(kubectl get pods -n traefik -l app.kubernetes.io/name=traefik --field-selector=status.phase=Running 2>/dev/null | grep -c "Running" || echo "0")
+    
+    if [[ "$TRAEFIK_READY" -gt 0 ]]; then
+        # Check if LoadBalancer has external IP
+        EXTERNAL_IP=$(kubectl get service traefik -n traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+        
+        if [[ -n "$EXTERNAL_IP" && "$EXTERNAL_IP" != "<pending>" ]]; then
+            echo -e "${GREEN}✅ Traefik is already installed and running${NC}"
+            echo "   External IP: $EXTERNAL_IP"
+            echo "   Pods running: $TRAEFIK_READY"
+            echo "   Dashboard: http://$EXTERNAL_IP:8080 (if enabled)"
+            echo ""
+            echo "🚀 Skipping installation, Traefik is already operational!"
+            
+            # Still check and apply ClusterIssuers if they don't exist
+            echo ""
+            echo "🔍 Checking Let's Encrypt ClusterIssuers..."
+            ISSUERS_COUNT=$(kubectl get clusterissuers 2>/dev/null | grep -c "letsencrypt" || echo "0")
+            
+            if [[ "$ISSUERS_COUNT" -lt 2 ]]; then
+                echo "📜 Applying Let's Encrypt ClusterIssuers..."
+                kubectl apply -f "$SCRIPT_DIR/../k8s/monitoring/traefik-clusterissuers.yaml" || echo "Warning: Failed to apply ClusterIssuers"
+            else
+                echo -e "${GREEN}✅ ClusterIssuers already configured${NC}"
+            fi
+            
+            exit 0
+        fi
+    fi
+fi
+
+echo -e "${YELLOW}⚠️  Traefik not found or not fully operational, proceeding with installation...${NC}"
+
 # Install Traefik using Helm (if available) or manifests
 echo ""
 echo "🌐 Installing Traefik Ingress Controller..."
