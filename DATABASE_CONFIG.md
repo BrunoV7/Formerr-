@@ -27,6 +27,25 @@ DB_USER        # Usuário do banco
 3. O secret `formerr-db-secret` é criado no Kubernetes com os valores dos secrets
 4. A aplicação consome esses secrets via variáveis de ambiente
 
+### 🌐 Acesso de Rede
+O banco gerenciado precisa permitir conexões do cluster Kubernetes. Isso é configurado automaticamente durante o deployment:
+
+1. O pipeline obtém o VPC ID do cluster via Terraform output
+2. Adiciona o VPC às regras de firewall do banco (`db-postgresql-nyc1-67289`)
+3. Verifica se a regra já existe para evitar duplicação
+
+**Configuração manual** (se necessário):
+```bash
+# Obter VPC ID do cluster
+cd infrastructure/digitalocean-production
+CLUSTER_VPC_ID=$(terraform output -raw vpc_id)
+
+# Adicionar VPC ao firewall do banco
+doctl databases firewalls append db-postgresql-nyc1-67289 \
+  --rule type:trusted_source,value:$CLUSTER_VPC_ID \
+  --wait
+```
+
 ### Exemplo de conexão
 ```yaml
 env:

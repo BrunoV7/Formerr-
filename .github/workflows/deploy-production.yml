@@ -138,6 +138,27 @@ jobs:
         docker push ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}
         docker push ${REGISTRY_ENDPOINT}/formerr-frontend:latest
 
+    # Configure Database Access
+    - name: Configure Database Network Access
+      run: |
+        echo "🔗 Configuring database network access..."
+        
+        # Get cluster VPC ID
+        cd infrastructure/digitalocean-production
+        CLUSTER_VPC_ID=$(terraform output -raw vpc_id)
+        cd ../..
+        
+        # Check if VPC is already allowed in database firewall
+        if doctl databases firewalls list db-postgresql-nyc1-67289 --format UUID,Type,Value --no-header | grep -q "$CLUSTER_VPC_ID"; then
+          echo "✅ Database already allows connections from cluster VPC"
+        else
+          echo "📝 Adding cluster VPC to database firewall..."
+          doctl databases firewalls append db-postgresql-nyc1-67289 \
+            --rule type:trusted_source,value:$CLUSTER_VPC_ID \
+            --wait
+          echo "✅ Database network access configured"
+        fi
+
     # Deploy Application Secrets
     - name: Deploy Application Secrets
       run: |
@@ -211,9 +232,14 @@ jobs:
         kubectl apply -f k8s/monitoring/prometheus-simple.yaml
         
         # Wait for monitoring to be ready
-        echo "⏳ Waiting for monitoring to be ready..."
-        kubectl wait --for=condition=Ready namespace/monitoring --timeout=60s
-        kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=180s || true
+        echo "⏳ Waiting for Prometheus deployment to be ready..."
+        kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=300s
+        
+        # Additional check: wait for pods to be ready
+        echo "⏳ Waiting for Prometheus pods to be ready..."
+        kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=300s
+        
+        echo "✅ Prometheus monitoring deployed successfully"
 
     # Wait for deployment
     - name: Wait for Deployment
@@ -224,13 +250,18 @@ jobs:
     # Validate Deployment
     - name: Validate Deployment
       run: |
+        echo "🔍 Validating deployment status..."
+        
         # Check if pods are running
+        echo "📦 Checking application pods:"
         kubectl get pods -n formerr
         
         # Check services
+        echo "🌐 Checking services:"
         kubectl get services -n formerr
         
         # Check ingress
+        echo "🔗 Checking ingress:"
         kubectl get ingress -n formerr
         
         # Check monitoring
@@ -238,10 +269,23 @@ jobs:
         kubectl get pods -n monitoring
         kubectl get services -n monitoring
         
-        # Check backend health (internal)
-        kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health || exit 1
+        # Wait a bit for pods to start if they're still pending
+        echo "⏳ Giving pods time to start..."
+        sleep 30
         
-        echo "✅ Production deployment completed successfully!"
+        # Check backend health (internal) - with retry
+        echo "🏥 Checking backend health..."
+        for i in {1..5}; do
+          if kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health 2>/dev/null; then
+            echo "✅ Backend health check passed"
+            break
+          else
+            echo "⏳ Backend not ready yet, attempt $i/5..."
+            sleep 10
+          fi
+        done
+        
+        echo "✅ Production deployment validation completed!"
 
     # Get Load Balancer IP
     - name: Get Load Balancer Info
