@@ -43,7 +43,7 @@ jobs:
         ./scripts/validate-terraform.sh
         
         # Set environment variables for production deployment
-        export DO_TOKEN="${{ secrets.DO_TOKEN_PROD }}"
+        export DO_TOKEN_PROD="${{ secrets.DO_TOKEN_PROD }}"
         export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
         export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
         export JWT_SECRET="${{ secrets.JWT_SECRET }}"
@@ -54,9 +54,10 @@ jobs:
         export DB_NAME="${{ secrets.DB_NAME }}"
         export DB_USER="${{ secrets.DB_USER }}"
         export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+        export SKIP_CONFIRM=1
         
         # Run smart deployment for production
-        ./scripts/smart-deploy.sh production "${{ env.REGISTRY_NAME }}"
+        ./scripts/smart-deploy.sh production formerr-registry
 
     # Configure kubectl
     - name: Configure kubectl for Production Cluster

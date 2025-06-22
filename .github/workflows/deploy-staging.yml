@@ -45,15 +45,16 @@ jobs:
         ./scripts/validate-terraform.sh
         
         # Set environment variables for staging deployment
-        export DO_TOKEN="${{ secrets.DO_STAGING_TOKEN }}"
+        export DO_STAGING_TOKEN="${{ secrets.DO_STAGING_TOKEN }}"
         export GITHUB_CLIENT_ID="${{ secrets.GITHUB_CLIENT_ID }}"
         export GITHUB_CLIENT_SECRET="${{ secrets.GITHUB_CLIENT_SECRET }}"
         export JWT_SECRET="${{ secrets.JWT_SECRET }}"
         export SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
+        export SKIP_CONFIRM=1
         
         # Update staging configuration and run smart deployment
         ./scripts/update-staging.sh
-        ./scripts/smart-deploy.sh staging "${{ env.REGISTRY_NAME }}"
+        ./scripts/smart-deploy.sh staging formerr-staging
 
     # Configure kubectl
     - name: Configure kubectl for Staging Cluster

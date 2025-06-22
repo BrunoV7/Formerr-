@@ -2,6 +2,16 @@
 
 # Resource Detection and Smart Deployment Script
 # Automatically detects existing DigitalOcean resources and configures Terraform accordingly
+#
+# Usage: ./smart-deploy.sh [environment] [registry_name]
+#   environment: production|staging (default: interactive prompt)
+#   registry_name: name for container registry (default: auto-detect or formerr-registry)
+#
+# Environment Variables:
+#   DO_TOKEN_PROD: DigitalOcean token for production
+#   DO_STAGING_TOKEN: DigitalOcean token for staging  
+#   DO_TOKEN: Fallback DigitalOcean token
+#   SKIP_CONFIRM: Skip confirmation prompt (for CI/CD)
 
 set -e
 
@@ -35,14 +45,27 @@ fi
 
 echo -e "${GREEN}✅ Dependencies OK${NC}"
 
-# Get environment choice
-echo ""
-read -p "🌍 Which environment to deploy? (production/staging): " environment
-environment=${environment:-staging}
+# Get environment choice from command line or prompt
+if [ "$1" ]; then
+    environment="$1"
+    echo -e "${BLUE}🌍 Environment: $environment (from argument)${NC}"
+else
+    echo ""
+    read -p "🌍 Which environment to deploy? (production/staging): " environment
+    environment=${environment:-staging}
+fi
 
 if [[ "$environment" != "production" && "$environment" != "staging" ]]; then
     echo -e "${RED}❌ Invalid environment. Choose 'production' or 'staging'${NC}"
     exit 1
+fi
+
+# Get registry name from command line or use default
+if [ "$2" ]; then
+    REGISTRY_NAME_ARG="$2"
+    echo -e "${BLUE}📦 Registry: $REGISTRY_NAME_ARG (from argument)${NC}"
+else
+    REGISTRY_NAME_ARG=""
 fi
 
 # Set environment-specific variables
@@ -64,11 +87,14 @@ fi
 
 # Check for DigitalOcean token
 if [[ -z "${!TOKEN_VAR}" ]]; then
-    echo ""
-    read -p "🔑 Enter your DigitalOcean API token: " -s DO_TOKEN
-    echo ""
-    export ${TOKEN_VAR}="$DO_TOKEN"
-    export DIGITALOCEAN_TOKEN="$DO_TOKEN"
+    if [[ -z "$DO_TOKEN" ]]; then
+        echo -e "${RED}❌ DigitalOcean token not found in environment variable ${TOKEN_VAR} or DO_TOKEN${NC}"
+        echo "   Please set one of these environment variables before running the script."
+        exit 1
+    else
+        export ${TOKEN_VAR}="$DO_TOKEN"
+        export DIGITALOCEAN_TOKEN="$DO_TOKEN"
+    fi
 else
     export DIGITALOCEAN_TOKEN="${!TOKEN_VAR}"
 fi
@@ -109,30 +135,65 @@ fi
 # Check for existing container registry
 echo -n "   📦 Checking container registry... "
 if doctl registry get >/dev/null 2>&1; then
-    REGISTRY_NAME=$(doctl registry get --format Name --no-header)
-    echo -e "${YELLOW}EXISTS ($REGISTRY_NAME)${NC}"
+    EXISTING_REGISTRY_NAME=$(doctl registry get --format Name --no-header)
+    echo -e "${YELLOW}EXISTS ($EXISTING_REGISTRY_NAME)${NC}"
     USE_EXISTING_REGISTRY=true
+    # Use the existing registry name unless overridden by command line
+    if [[ -z "$REGISTRY_NAME_ARG" ]]; then
+        REGISTRY_NAME="$EXISTING_REGISTRY_NAME"
+    else
+        REGISTRY_NAME="$REGISTRY_NAME_ARG"
+    fi
 else
     echo -e "${GREEN}NOT FOUND (will create)${NC}"
     USE_EXISTING_REGISTRY=false
-    REGISTRY_NAME="formerr-registry"
+    # Use provided registry name or default
+    if [[ -n "$REGISTRY_NAME_ARG" ]]; then
+        REGISTRY_NAME="$REGISTRY_NAME_ARG"
+    else
+        REGISTRY_NAME="formerr-registry"
+    fi
 fi
 
 echo ""
 echo "📊 Resource Detection Summary:"
 echo "=============================="
-echo -e "VPC:                ${USE_EXISTING_VPC:+${YELLOW}Use existing${NC}}${USE_EXISTING_VPC:+}${USE_EXISTING_VPC:-${GREEN}Create new${NC}}"
-echo -e "Kubernetes Cluster: ${USE_EXISTING_CLUSTER:+${YELLOW}Use existing${NC}}${USE_EXISTING_CLUSTER:+}${USE_EXISTING_CLUSTER:-${GREEN}Create new${NC}}"
-echo -e "Load Balancer:      ${USE_EXISTING_LB:+${YELLOW}Use existing${NC}}${USE_EXISTING_LB:+}${USE_EXISTING_LB:-${GREEN}Create new${NC}}"
-echo -e "Container Registry: ${USE_EXISTING_REGISTRY:+${YELLOW}Use existing ($REGISTRY_NAME)${NC}}${USE_EXISTING_REGISTRY:+}${USE_EXISTING_REGISTRY:-${GREEN}Create new${NC}}"
+if [ "$USE_EXISTING_VPC" = true ]; then
+    echo -e "VPC:                ${YELLOW}Use existing${NC}"
+else
+    echo -e "VPC:                ${GREEN}Create new${NC}"
+fi
+
+if [ "$USE_EXISTING_CLUSTER" = true ]; then
+    echo -e "Kubernetes Cluster: ${YELLOW}Use existing${NC}"
+else
+    echo -e "Kubernetes Cluster: ${GREEN}Create new${NC}"
+fi
+
+if [ "$USE_EXISTING_LB" = true ]; then
+    echo -e "Load Balancer:      ${YELLOW}Use existing${NC}"
+else
+    echo -e "Load Balancer:      ${GREEN}Create new${NC}"
+fi
+
+if [ "$USE_EXISTING_REGISTRY" = true ]; then
+    echo -e "Container Registry: ${YELLOW}Use existing ($REGISTRY_NAME)${NC}"
+else
+    echo -e "Container Registry: ${GREEN}Create new ($REGISTRY_NAME)${NC}"
+fi
 
 echo ""
-read -p "🤔 Continue with this configuration? (y/N): " -n 1 -r
-echo ""
-
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${RED}❌ Deployment cancelled${NC}"
-    exit 1
+# Skip confirmation if running non-interactively or if SKIP_CONFIRM is set
+if [[ -t 0 && -z "$SKIP_CONFIRM" ]]; then
+    read -p "🤔 Continue with this configuration? (y/N): " -n 1 -r
+    echo ""
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}❌ Deployment cancelled${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ Auto-continuing with configuration (non-interactive mode)${NC}"
 fi
 
 # Navigate to infrastructure directory
