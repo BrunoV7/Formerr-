@@ -205,24 +205,13 @@ jobs:
         kubectl apply -f k8s/staging/ingress.yaml
 
     # Deploy Monitoring
-    - name: Deploy Monitoring
+    - name: Deploy Simple Monitoring Stack
       run: |
-        echo "📊 Deploying Prometheus monitoring..."
+        echo "📊 Deploying simple monitoring stack for staging..."
         
-        # Clean up any existing Helm releases (idempotent)
-        if command -v helm &> /dev/null; then
-          echo "🧹 Cleaning up any existing Helm releases..."
-          helm uninstall prometheus -n monitoring 2>/dev/null || true
-          helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
-        fi
-        
-        # Deploy Prometheus using manifests
-        kubectl apply -f k8s/monitoring/prometheus-simple.yaml
-        
-        # Wait for monitoring to be ready
-        echo "⏳ Waiting for monitoring to be ready..."
-        kubectl wait --for=condition=Ready namespace/monitoring --timeout=60s
-        kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=180s || true
+        # Use simple monitoring script
+        chmod +x scripts/install-simple-monitoring.sh
+        ./scripts/install-simple-monitoring.sh
 
     # Wait for deployment
     - name: Wait for Deployment

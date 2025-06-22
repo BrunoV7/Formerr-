@@ -236,9 +236,11 @@ jobs:
       run: |
         kubectl apply -f k8s/security/network-policies.yaml
 
-    - name: Deploy Application Monitoring
+    - name: Deploy Application Monitoring (Simple Stack)
       run: |
-        kubectl apply -f k8s/monitoring/app-monitoring.yaml
+        # Use simple monitoring stack that doesn't require Prometheus Operator
+        chmod +x scripts/install-simple-monitoring.sh
+        ./scripts/install-simple-monitoring.sh
 
     - name: Deploy Resource Limits
       run: |
@@ -251,37 +253,7 @@ jobs:
         kubectl apply -f k8s/production/ingress.yaml
         kubectl apply -f k8s/monitoring/monitoring-ingress.yaml
 
-    # Deploy Monitoring
-    - name: Deploy Monitoring
-      run: |
-        echo "📊 Deploying Prometheus and Grafana monitoring..."
-        
-        # Clean up any existing Helm releases (idempotent)
-        if command -v helm &> /dev/null; then
-          echo "🧹 Cleaning up any existing Helm releases..."
-          helm uninstall prometheus -n monitoring 2>/dev/null || true
-          helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
-          helm uninstall grafana -n monitoring 2>/dev/null || true
-        fi
-        
-        # Deploy Prometheus and Grafana using manifests
-        kubectl apply -f k8s/monitoring/prometheus-simple.yaml
-        
-        # Wait for monitoring to be ready
-        echo "⏳ Waiting for Prometheus deployment to be ready..."
-        kubectl wait --for=condition=available deployment/prometheus -n monitoring --timeout=300s
-        
-        echo "⏳ Waiting for Grafana deployment to be ready..."
-        kubectl wait --for=condition=available deployment/grafana -n monitoring --timeout=300s
-        
-        # Additional check: wait for pods to be ready
-        echo "⏳ Waiting for Prometheus pods to be ready..."
-        kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=300s
-        
-        echo "⏳ Waiting for Grafana pods to be ready..."
-        kubectl wait --for=condition=ready pod -l app=grafana -n monitoring --timeout=300s
-        
-        echo "✅ Prometheus and Grafana monitoring deployed successfully"
+    # Simple Monitoring Stack (already deployed above)
 
     # Wait for deployment
     - name: Wait for Deployment
