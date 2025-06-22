@@ -89,6 +89,14 @@ locals {
   registry_endpoint = var.create_registry ? digitalocean_container_registry.formerr_registry[0].endpoint : data.digitalocean_container_registry.existing_registry[0].endpoint
 }
 
+# Kubernetes Namespace - Use existing or create new
+data "kubernetes_namespace" "existing_namespace" {
+  count = var.use_existing_namespace ? 1 : 0
+  metadata {
+    name = var.namespace_name
+  }
+}
+
 # Note: PostgreSQL will be deployed via Kubernetes manifests in the CI/CD pipeline
 # This keeps the infrastructure simpler and uses the in-cluster database approach
 
@@ -128,12 +136,18 @@ resource "digitalocean_loadbalancer" "formerr_lb" {
 # This approach is more reliable and faster than Helm in CI/CD
 # Use: kubectl apply -f k8s/monitoring/prometheus-simple.yaml
 
+# Local values for resource references
+locals {
+  namespace_name = var.use_existing_namespace ? data.kubernetes_namespace.existing_namespace[0].metadata[0].name : (length(kubernetes_namespace.formerr) > 0 ? kubernetes_namespace.formerr[0].metadata[0].name : var.namespace_name)
+}
+
 # Create namespace for the application
 resource "kubernetes_namespace" "formerr" {
+  count = var.use_existing_namespace ? 0 : 1
   metadata {
-    name = "formerr"
+    name = var.namespace_name
     labels = {
-      name        = "formerr"
+      name        = var.namespace_name
       environment = "staging"
     }
   }
@@ -148,7 +162,7 @@ resource "kubernetes_namespace" "formerr" {
 resource "kubernetes_secret" "registry_secret" {
   metadata {
     name      = "formerr-registry-secret"
-    namespace = kubernetes_namespace.formerr.metadata[0].name
+    namespace = local.namespace_name
   }
 
   data = {

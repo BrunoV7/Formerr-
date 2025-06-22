@@ -148,11 +148,17 @@ else
     echo -e "${GREEN}NOT FOUND (will create)${NC}"
     USE_EXISTING_REGISTRY=false
     # Use provided registry name or default
-    if [[ -n "$REGISTRY_NAME_ARG" ]]; then
-        REGISTRY_NAME="$REGISTRY_NAME_ARG"
-    else
-        REGISTRY_NAME="formerr-registry"
-    fi
+    REGISTRY_NAME=${REGISTRY_NAME_ARG:-$REGISTRY_NAME}
+fi
+
+# Check for existing Kubernetes namespace (if cluster is accessible)
+echo -n "   📁 Checking namespace 'formerr'... "
+if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" >/dev/null 2>&1 && kubectl get namespace formerr >/dev/null 2>&1; then
+    echo -e "${YELLOW}EXISTS${NC}"
+    USE_EXISTING_NAMESPACE=true
+else
+    echo -e "${GREEN}NOT FOUND (will create)${NC}"
+    USE_EXISTING_NAMESPACE=false
 fi
 
 echo ""
@@ -180,6 +186,12 @@ if [ "$USE_EXISTING_REGISTRY" = true ]; then
     echo -e "Container Registry: ${YELLOW}Use existing ($REGISTRY_NAME)${NC}"
 else
     echo -e "Container Registry: ${GREEN}Create new ($REGISTRY_NAME)${NC}"
+fi
+
+if [ "$USE_EXISTING_NAMESPACE" = true ]; then
+    echo -e "Kubernetes Namespace: ${YELLOW}Use existing (formerr)${NC}"
+else
+    echo -e "Kubernetes Namespace: ${GREEN}Create new (formerr)${NC}"
 fi
 
 echo ""
@@ -272,11 +284,13 @@ vpc_name = "$VPC_NAME"
 cluster_name = "$CLUSTER_NAME"
 loadbalancer_name = "$LB_NAME"
 registry_name = "$REGISTRY_NAME"
+namespace_name = "formerr"
 
 # Resource Existence Flags (auto-detected)
 use_existing_vpc = $USE_EXISTING_VPC
 use_existing_cluster = $USE_EXISTING_CLUSTER
 use_existing_loadbalancer = $USE_EXISTING_LB
+use_existing_namespace = $USE_EXISTING_NAMESPACE
 create_registry = $([[ "$USE_EXISTING_REGISTRY" == "true" ]] && echo "false" || echo "true")
 
 # Application Secrets (from environment variables)

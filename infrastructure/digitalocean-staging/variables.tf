@@ -100,3 +100,15 @@ variable "use_existing_loadbalancer" {
   type        = bool
   default     = false
 }
+
+variable "namespace_name" {
+  description = "Name of the Kubernetes namespace"
+  type        = string
+  default     = "formerr"
+}
+
+variable "use_existing_namespace" {
+  description = "Whether to use an existing Kubernetes namespace"
+  type        = bool
+  default     = false
+}
