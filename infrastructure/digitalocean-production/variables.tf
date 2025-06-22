@@ -149,3 +149,15 @@ variable "use_existing_namespace" {
   type        = bool
   default     = false
 }
+
+variable "use_existing_db_secret" {
+  description = "Whether to use an existing database secret"
+  type        = bool
+  default     = false
+}
+
+variable "use_existing_registry_secret" {
+  description = "Whether to use an existing registry secret"
+  type        = bool
+  default     = false
+}

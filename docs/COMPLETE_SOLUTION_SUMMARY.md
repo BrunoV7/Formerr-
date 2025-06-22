@@ -10,6 +10,10 @@
 **Issue**: `namespaces "formerr" already exists` error in Terraform
 **Solution**: Added idempotent namespace detection and conditional creation
 
+### 3. ✅ Secrets Conflict Error
+**Issue**: `secrets "formerr-db-secret" already exists` and `secrets "formerr-registry-secret" already exists` errors
+**Solution**: Added idempotent secret detection and conditional creation
+
 ## 🔧 Technical Implementation
 
 ### Monitoring Strategy (Prometheus)
@@ -45,9 +49,29 @@ locals {
 }
 ```
 
+### Secrets Idempotency
+```hcl
+# Conditional secret creation
+resource "kubernetes_secret" "db_secret" {
+  count = var.use_existing_db_secret ? 0 : 1
+  # ...
+}
+
+resource "kubernetes_secret" "registry_secret" {
+  count = var.use_existing_registry_secret ? 0 : 1
+  # ...
+}
+
+# Auto-detection in scripts
+if kubectl get secret formerr-db-secret -n formerr; then
+  USE_EXISTING_DB_SECRET=true
+fi
+```
+
 **Benefits**:
-- 🔄 True idempotency
-- 🎯 No resource conflicts
+- � Complete secret management idempotency
+- 🛡️ Preserves existing secret data
+- 🎯 Zero deployment conflicts
 - 🚀 Reliable CI/CD pipelines
 
 ## 📁 Files Modified
@@ -76,6 +100,7 @@ locals {
 - `docs/MONITORING_STRATEGY_UPDATE.md` - Complete monitoring guide
 - `docs/PROMETHEUS_FIX_SUMMARY.md` - Prometheus implementation details
 - `docs/NAMESPACE_IDEMPOTENCY_FIX.md` - Namespace solution details
+- `docs/SECRETS_IDEMPOTENCY_FIX.md` - Secrets idempotency solution
 - `QUICK_DEPLOY_GUIDE.md` - Updated with monitoring sections
 
 ## 🚀 Deployment Process

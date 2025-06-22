@@ -97,6 +97,15 @@ data "kubernetes_namespace" "existing_namespace" {
   }
 }
 
+# Kubernetes Registry Secret - Use existing or create new
+data "kubernetes_secret" "existing_registry_secret" {
+  count = var.use_existing_registry_secret ? 1 : 0
+  metadata {
+    name      = "formerr-registry-secret"
+    namespace = local.namespace_name
+  }
+}
+
 # Note: PostgreSQL will be deployed via Kubernetes manifests in the CI/CD pipeline
 # This keeps the infrastructure simpler and uses the in-cluster database approach
 
@@ -160,6 +169,7 @@ resource "kubernetes_namespace" "formerr" {
 
 # Create secret for container registry
 resource "kubernetes_secret" "registry_secret" {
+  count = var.use_existing_registry_secret ? 0 : 1
   metadata {
     name      = "formerr-registry-secret"
     namespace = local.namespace_name

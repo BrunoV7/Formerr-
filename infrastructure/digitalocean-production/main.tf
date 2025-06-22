@@ -181,8 +181,26 @@ data "kubernetes_namespace" "existing_namespace" {
   }
 }
 
+# Kubernetes Secrets - Use existing or create new
+data "kubernetes_secret" "existing_db_secret" {
+  count = var.use_existing_db_secret ? 1 : 0
+  metadata {
+    name      = "formerr-db-secret"
+    namespace = local.namespace_name
+  }
+}
+
+data "kubernetes_secret" "existing_registry_secret" {
+  count = var.use_existing_registry_secret ? 1 : 0
+  metadata {
+    name      = "formerr-registry-secret"
+    namespace = local.namespace_name
+  }
+}
+
 # Create secret for database connection (uses GitHub secrets)
 resource "kubernetes_secret" "db_secret" {
+  count = var.use_existing_db_secret ? 0 : 1
   metadata {
     name      = "formerr-db-secret"
     namespace = local.namespace_name
@@ -203,6 +221,7 @@ resource "kubernetes_secret" "db_secret" {
 
 # Create secret for container registry
 resource "kubernetes_secret" "registry_secret" {
+  count = var.use_existing_registry_secret ? 0 : 1
   metadata {
     name      = "formerr-registry-secret"
     namespace = local.namespace_name

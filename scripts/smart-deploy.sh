@@ -156,9 +156,30 @@ echo -n "   📁 Checking namespace 'formerr'... "
 if doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME" >/dev/null 2>&1 && kubectl get namespace formerr >/dev/null 2>&1; then
     echo -e "${YELLOW}EXISTS${NC}"
     USE_EXISTING_NAMESPACE=true
+    
+    # Check for existing secrets in the namespace
+    echo -n "   🔐 Checking database secret... "
+    if kubectl get secret formerr-db-secret -n formerr >/dev/null 2>&1; then
+        echo -e "${YELLOW}EXISTS${NC}"
+        USE_EXISTING_DB_SECRET=true
+    else
+        echo -e "${GREEN}NOT FOUND (will create)${NC}"
+        USE_EXISTING_DB_SECRET=false
+    fi
+    
+    echo -n "   🐳 Checking registry secret... "
+    if kubectl get secret formerr-registry-secret -n formerr >/dev/null 2>&1; then
+        echo -e "${YELLOW}EXISTS${NC}"
+        USE_EXISTING_REGISTRY_SECRET=true
+    else
+        echo -e "${GREEN}NOT FOUND (will create)${NC}"
+        USE_EXISTING_REGISTRY_SECRET=false
+    fi
 else
     echo -e "${GREEN}NOT FOUND (will create)${NC}"
     USE_EXISTING_NAMESPACE=false
+    USE_EXISTING_DB_SECRET=false
+    USE_EXISTING_REGISTRY_SECRET=false
 fi
 
 echo ""
@@ -291,6 +312,8 @@ use_existing_vpc = $USE_EXISTING_VPC
 use_existing_cluster = $USE_EXISTING_CLUSTER
 use_existing_loadbalancer = $USE_EXISTING_LB
 use_existing_namespace = $USE_EXISTING_NAMESPACE
+use_existing_db_secret = $USE_EXISTING_DB_SECRET
+use_existing_registry_secret = $USE_EXISTING_REGISTRY_SECRET
 create_registry = $([[ "$USE_EXISTING_REGISTRY" == "true" ]] && echo "false" || echo "true")
 
 # Application Secrets (from environment variables)
