@@ -208,6 +208,56 @@ terraform init
 
 # Create auto-generated terraform.tfvars file
 echo "📝 Creating terraform.tfvars with detected resources..."
+
+# Check required environment variables
+echo "🔍 Validating environment variables..."
+
+# Required for all environments
+if [[ -z "$GITHUB_CLIENT_ID" ]]; then
+    echo -e "${RED}❌ GITHUB_CLIENT_ID environment variable is required${NC}"
+    exit 1
+fi
+
+if [[ -z "$GITHUB_CLIENT_SECRET" ]]; then
+    echo -e "${RED}❌ GITHUB_CLIENT_SECRET environment variable is required${NC}"
+    exit 1
+fi
+
+if [[ -z "$JWT_SECRET" ]]; then
+    echo -e "${RED}❌ JWT_SECRET environment variable is required${NC}"
+    exit 1
+fi
+
+if [[ -z "$SESSION_SECRET" ]]; then
+    echo -e "${RED}❌ SESSION_SECRET environment variable is required${NC}"
+    exit 1
+fi
+
+# Additional checks for production
+if [[ "$environment" == "production" ]]; then
+    if [[ -z "$DATABASE_URL" ]]; then
+        echo -e "${RED}❌ DATABASE_URL environment variable is required for production${NC}"
+        exit 1
+    fi
+    
+    if [[ -z "$DB_HOST" ]]; then
+        echo -e "${RED}❌ DB_HOST environment variable is required for production${NC}"
+        exit 1
+    fi
+    
+    if [[ -z "$DB_USER" ]]; then
+        echo -e "${RED}❌ DB_USER environment variable is required for production${NC}"
+        exit 1
+    fi
+    
+    if [[ -z "$DB_PASSWORD" ]]; then
+        echo -e "${RED}❌ DB_PASSWORD environment variable is required for production${NC}"
+        exit 1
+    fi
+fi
+
+echo -e "${GREEN}✅ Environment variables validated${NC}"
+
 cat > terraform.tfvars <<EOF
 # DigitalOcean Configuration
 do_token = "${!TOKEN_VAR}"
@@ -229,24 +279,24 @@ use_existing_cluster = $USE_EXISTING_CLUSTER
 use_existing_loadbalancer = $USE_EXISTING_LB
 create_registry = $([[ "$USE_EXISTING_REGISTRY" == "true" ]] && echo "false" || echo "true")
 
-# Application Secrets (placeholders - update with real values)
-github_client_id = "placeholder_github_client_id"
-github_client_secret = "placeholder_github_client_secret"
-jwt_secret = "$(openssl rand -hex 32)"
-session_secret = "$(openssl rand -hex 32)"
+# Application Secrets (from environment variables)
+github_client_id = "$GITHUB_CLIENT_ID"
+github_client_secret = "$GITHUB_CLIENT_SECRET"
+jwt_secret = "$JWT_SECRET"
+session_secret = "$SESSION_SECRET"
 EOF
 
 # Add database variables for production
 if [[ "$environment" == "production" ]]; then
     cat >> terraform.tfvars <<EOF
 
-# Database Configuration (Production - using managed DB)
-database_url = "postgresql://user:pass@host:5432/dbname"
-db_host = "your-db-host.db.ondigitalocean.com"
-db_port = "5432"
-db_name = "formerr_db"
-db_user = "your_db_user"
-db_password = "your_db_password"
+# Database Configuration (Production - from environment variables)
+database_url = "$DATABASE_URL"
+db_host = "$DB_HOST"
+db_port = "${DB_PORT:-5432}"
+db_name = "${DB_NAME:-formerr_db}"
+db_user = "$DB_USER"
+db_password = "$DB_PASSWORD"
 EOF
 fi
 
@@ -257,39 +307,51 @@ echo "   Update with real values before production deployment!"
 # Plan deployment
 echo ""
 echo "📋 Planning deployment..."
-terraform plan
+if ! terraform plan -detailed-exitcode; then
+    PLAN_EXIT_CODE=$?
+    if [ $PLAN_EXIT_CODE -eq 1 ]; then
+        echo -e "${RED}❌ Terraform plan failed${NC}"
+        exit 1
+    elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+        echo -e "${YELLOW}⚠️  Changes detected in plan${NC}"
+    fi
+fi
 
-# Ask for confirmation
+# Apply changes (skip confirmation in non-interactive mode)
 echo ""
-read -p "🚀 Apply these changes? (y/N): " -n 1 -r
-echo ""
-
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "✨ Applying Terraform configuration..."
-    terraform apply -auto-approve
+if [[ -t 0 && -z "$SKIP_CONFIRM" ]]; then
+    read -p "🚀 Apply these changes? (y/N): " -n 1 -r
+    echo ""
     
-    echo ""
-    echo -e "${GREEN}✅ Smart deployment completed successfully!${NC}"
-    echo ""
-    echo "📋 Next steps:"
-    echo "1. Update GitHub repository secrets with real values"
-    echo "2. Push code to trigger CI/CD pipeline"
-    echo "3. Monitor deployment in GitHub Actions"
-    echo ""
-    echo "🔗 Useful commands:"
-    echo "   doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
-    echo "   kubectl get pods -n formerr"
-    echo "   kubectl get services -n formerr"
-    
-    if [[ "$USE_EXISTING_CLUSTER" == "false" ]]; then
-        echo ""
-        echo "🎉 New cluster created! Configure kubectl:"
-        echo "   doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}❌ Deployment cancelled${NC}"
+        exit 1
     fi
     
+    echo "✨ Applying Terraform configuration..."
+    terraform apply -auto-approve
 else
-    echo -e "${RED}❌ Deployment cancelled${NC}"
-    exit 1
+    echo -e "${GREEN}✨ Auto-applying Terraform configuration (non-interactive mode)${NC}"
+    terraform apply -auto-approve
+fi
+    
+echo ""
+echo -e "${GREEN}✅ Smart deployment completed successfully!${NC}"
+echo ""
+echo "📋 Next steps:"
+echo "1. Update GitHub repository secrets with real values"
+echo "2. Push code to trigger CI/CD pipeline"
+echo "3. Monitor deployment in GitHub Actions"
+echo ""
+echo "🔗 Useful commands:"
+echo "   doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
+echo "   kubectl get pods -n formerr"
+echo "   kubectl get services -n formerr"
+
+if [[ "$USE_EXISTING_CLUSTER" == "false" ]]; then
+    echo ""
+    echo "🎉 New cluster created! Configure kubectl:"
+    echo "   doctl kubernetes cluster kubeconfig save $CLUSTER_NAME"
 fi
 
 echo ""
