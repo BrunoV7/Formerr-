@@ -1,52 +1,15 @@
-# Install NGINX Ingress Controller
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ingress-nginx
+# NGINX Ingress Controller and Cert-Manager Installation
+# This file should be applied AFTER the cluster is ready
+# Use: kubectl apply -f k8s/monitoring/ingress-cert-manager.yaml
+
 ---
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: nginx-ingress
-  namespace: kube-system
-spec:
-  chart: ingress-nginx
-  repo: https://kubernetes.github.io/ingress-nginx
-  targetNamespace: ingress-nginx
-  valuesContent: |-
-    controller:
-      service:
-        type: LoadBalancer
-        annotations:
-          service.beta.kubernetes.io/do-loadbalancer-name: "nginx-ingress-lb"
-      metrics:
-        enabled: true
-        serviceMonitor:
-          enabled: true
----
-# Install Cert-Manager
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: cert-manager
----
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: cert-manager
-  namespace: kube-system
-spec:
-  chart: cert-manager
-  repo: https://charts.jetstack.io
-  targetNamespace: cert-manager
-  valuesContent: |-
-    installCRDs: true
-    webhook:
-      securePort: 10260
-    metrics:
-      enabled: true
-      serviceMonitor:
-        enabled: true
+# Install NGINX Ingress Controller using manifests
+# Note: NGINX Ingress should be installed via kubectl apply, not this file
+# This file contains only the ClusterIssuer configurations
+
+# Wait for cert-manager to be ready before applying these ClusterIssuers
+# kubectl wait --for=condition=available deployment/cert-manager -n cert-manager --timeout=300s
+
 ---
 # ClusterIssuer for Let's Encrypt Production
 apiVersion: cert-manager.io/v1
@@ -55,7 +18,7 @@ metadata:
   name: letsencrypt-prod
 spec:
   acme:
-    email: admin@formerr.example.com
+    email: admin@formerr.example.com  # Change this to your email
     server: https://acme-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
       name: letsencrypt-prod
@@ -64,14 +27,14 @@ spec:
         ingress:
           class: nginx
 ---
-# ClusterIssuer for Let's Encrypt Staging
+# ClusterIssuer for Let's Encrypt Staging  
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
   name: letsencrypt-staging
 spec:
   acme:
-    email: admin@formerr.example.com
+    email: admin@formerr.example.com  # Change this to your email
     server: https://acme-staging-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
       name: letsencrypt-staging
