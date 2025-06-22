@@ -1,0 +1,123 @@
+# Traefik Ingress Configuration for Formerr Application
+# This replaces the need for cert-manager ClusterIssuers as Traefik handles SSL automatically
+
+---
+# HTTPS Redirect Middleware
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: default
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+
+---
+# Frontend Ingress with automatic HTTPS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: formerr-frontend-ingress
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: formerr.example.com  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-frontend
+            port:
+              number: 3000
+  tls:
+  - hosts:
+    - formerr.example.com
+    secretName: formerr-frontend-tls
+
+---
+# Backend API Ingress with automatic HTTPS  
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: formerr-api-ingress
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: api.formerr.example.com  # Change to your API domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-backend
+            port:
+              number: 8000
+  tls:
+  - hosts:
+    - api.formerr.example.com
+    secretName: formerr-api-tls
+
+---
+# Traefik Dashboard Ingress (Optional - for monitoring)
+# Comment out if you don't want to expose the dashboard
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dashboard-ingress
+  namespace: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    # Add basic auth middleware for security
+    traefik.ingress.kubernetes.io/router.middlewares: traefik-auth@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: dashboard.formerr.example.com  # Change to your dashboard domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: traefik-dashboard
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - dashboard.formerr.example.com
+    secretName: traefik-dashboard-tls
+
+---
+# Basic Auth Middleware for Dashboard (Optional)
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: auth
+  namespace: traefik
+spec:
+  basicAuth:
+    secret: dashboard-auth  # Create this secret manually
+
+---
+# Example Secret for Dashboard Auth (base64 encoded)
+# Generate with: htpasswd -nb admin password | base64
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: dashboard-auth
+#   namespace: traefik
+# data:
+#   users: |
+#     YWRtaW46JGFwcjEkSDZ1Q0Z5SW0kZVZoa3E4dEdFVEx6Tm5JcVV2UWR2MAo=  # admin:password

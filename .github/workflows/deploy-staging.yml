@@ -64,29 +64,12 @@ jobs:
         CLUSTER_NAME=$(terraform output -raw cluster_name)
         doctl kubernetes cluster kubeconfig save "$CLUSTER_NAME"
 
-    # Install Ingress and Cert-Manager
-    - name: Install Ingress Controller and Cert-Manager
+    # Install Traefik Ingress Controller
+    - name: Install Traefik Ingress Controller with Let's Encrypt
       run: |
-        # Install NGINX Ingress Controller
-        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/do/deploy.yaml
-        
-        # Wait for ingress controller to be ready
-        kubectl wait --namespace ingress-nginx \
-          --for=condition=ready pod \
-          --selector=app.kubernetes.io/component=controller \
-          --timeout=300s
-        
-        # Install cert-manager
-        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
-        
-        # Wait for cert-manager to be ready
-        kubectl wait --namespace cert-manager \
-          --for=condition=ready pod \
-          --selector=app.kubernetes.io/component=controller \
-          --timeout=300s
-        
-        # Apply cluster issuers
-        kubectl apply -f k8s/monitoring/ingress-cert-manager.yaml
+        # Make script executable and run Traefik installation
+        chmod +x scripts/install-traefik.sh
+        ./scripts/install-traefik.sh
 
     # Build and Push Backend
     - name: Build and Push Backend Image
