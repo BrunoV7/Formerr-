@@ -148,15 +148,24 @@ jobs:
         CLUSTER_VPC_ID=$(terraform output -raw vpc_id)
         cd ../..
         
+        echo "Cluster VPC ID: $CLUSTER_VPC_ID"
+        
         # Check if VPC is already allowed in database firewall
-        if doctl databases firewalls list db-postgresql-nyc1-67289 --format UUID,Type,Value --no-header | grep -q "$CLUSTER_VPC_ID"; then
+        if doctl databases firewalls list db-postgresql-nyc1-67289 --output json | jq -r '.[].value' | grep -q "$CLUSTER_VPC_ID"; then
           echo "✅ Database already allows connections from cluster VPC"
         else
           echo "📝 Adding cluster VPC to database firewall..."
-          doctl databases firewalls append db-postgresql-nyc1-67289 \
-            --rule type:trusted_source,value:$CLUSTER_VPC_ID \
-            --wait
-          echo "✅ Database network access configured"
+          doctl databases firewalls append db-postgresql-nyc1-67289 --rule trusted_source:$CLUSTER_VPC_ID
+          
+          # Give it a moment to apply
+          sleep 10
+          
+          # Verify the rule was added
+          if doctl databases firewalls list db-postgresql-nyc1-67289 --output json | jq -r '.[].value' | grep -q "$CLUSTER_VPC_ID"; then
+            echo "✅ Database network access configured successfully"
+          else
+            echo "⚠️ Warning: Could not verify database firewall rule was added"
+          fi
         fi
 
     # Deploy Application Secrets
