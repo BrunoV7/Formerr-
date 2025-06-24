@@ -20,7 +20,7 @@ spec:
       - name: formerr-registry-secret
       containers:
       - name: frontend
-        image: registry.digitalocean.com/formerr-production/formerr-frontend:latest
+        image: registry.digitalocean.com/formerr/formerr-frontend:latest
         ports:
         - containerPort: 3000
         env:

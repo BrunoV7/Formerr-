@@ -18,7 +18,7 @@ on:
 
 env:
   REGISTRY: registry.digitalocean.com
-  REGISTRY_NAME: formerr-registry
+  REGISTRY_NAME: formerr
   CLUSTER_NAME: formerr-production-cluster
 
 jobs:
@@ -68,11 +68,11 @@ jobs:
         if [ -z "$REGISTRY_EXISTS" ]; then
           echo "⚠️  No registry found, using default"
           REGISTRY_ENDPOINT="registry.digitalocean.com"
-          REGISTRY_NAME="formerr-registry"
+          REGISTRY_NAME="formerr"
         else
           echo "✅ Found existing registry: $REGISTRY_EXISTS"
           REGISTRY_ENDPOINT="registry.digitalocean.com"
-          REGISTRY_NAME="$REGISTRY_EXISTS"
+          REGISTRY_NAME="formerr"  # Force use of 'formerr' registry
         fi
         
         # Set outputs for the workflow
@@ -123,13 +123,13 @@ jobs:
         doctl registry login
         
         # Build backend image (from repo root)
-        docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \
-          -t ${REGISTRY_ENDPOINT}/formerr-backend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr/formerr-backend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr/formerr-backend:latest \
           ./Formerr-FastAPI
         
         # Push backend image
-        docker push ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}
-        docker push ${REGISTRY_ENDPOINT}/formerr-backend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr/formerr-backend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr/formerr-backend:latest
 
     # Build and Push Frontend
     - name: Build and Push Frontend Image
@@ -137,14 +137,14 @@ jobs:
         REGISTRY_ENDPOINT="${{ needs.check-infrastructure.outputs.registry_endpoint }}"
         
         # Build frontend image (from repo root)
-        docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
-          -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
+        docker build -t ${REGISTRY_ENDPOINT}/formerr/formerr-frontend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr/formerr-frontend:latest \
           --build-arg NEXT_PUBLIC_API_URL=http://formerr-backend-service.formerr.svc.cluster.local:8000 \
           ./formerr-frontend
         
         # Push frontend image
-        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}
-        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:latest
+        docker push ${REGISTRY_ENDPOINT}/formerr/formerr-frontend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr/formerr-frontend:latest
 
     # Deploy Application Secrets
     - name: Deploy Application Secrets
@@ -170,7 +170,7 @@ jobs:
         cp k8s/production/backend-deployment.yaml /tmp/backend-deployment.yaml
         
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-production/formerr-backend:latest|${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}|g" /tmp/backend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr/formerr-backend:latest|${REGISTRY_ENDPOINT}/formerr/formerr-backend:${{ github.sha }}|g" /tmp/backend-deployment.yaml
         
         # Apply the deployment
         kubectl apply -f /tmp/backend-deployment.yaml
@@ -183,7 +183,7 @@ jobs:
         cp k8s/production/frontend-deployment.yaml /tmp/frontend-deployment.yaml
         
         # Update image tags in deployment
-        sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}|g" /tmp/frontend-deployment.yaml
+        sed -i "s|registry.digitalocean.com/formerr/formerr-frontend:latest|${REGISTRY_ENDPOINT}/formerr/formerr-frontend:${{ github.sha }}|g" /tmp/frontend-deployment.yaml
         
         # Apply the deployment
         kubectl apply -f /tmp/frontend-deployment.yaml
