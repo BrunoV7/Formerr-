@@ -241,20 +241,6 @@ resource "helm_release" "nginx_ingress" {
   depends_on = [google_container_node_pool.primary_nodes]
 }
 
-# Install Cert-Manager for SSL certificates
-resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  namespace  = "cert-manager"
-  version    = "v1.13.0"
-
-  create_namespace = true
-
-  set {
-    name  = "installCRDs"
-    value = "true"
-  }
-
-  depends_on = [google_container_node_pool.primary_nodes]
-}
+# SSL/HTTPS removed for simplicity - HTTP only setup
+# Frontend will use direct LoadBalancer, backend stays internal
+# No cert-manager needed for this simplified architecture

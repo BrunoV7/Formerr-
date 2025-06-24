@@ -1,5 +1,6 @@
-# Simple Ingress Configuration - Only for Internal Backend Access
+# Simple Ingress Configuration - Only for Internal Backend Access (HTTP ONLY)
 # Frontend is now exposed directly via LoadBalancer
+# NO SSL/HTTPS - HTTP only for simplicity
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,16 +8,12 @@ metadata:
   namespace: formerr
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$1
     # Only allow internal access to backend
     nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 spec:
-  tls:
-  - hosts:
-    - api-internal.formerr.tech
-    secretName: formerr-backend-tls
+  # NO TLS/SSL - HTTP only
   rules:
   - host: api-internal.formerr.tech
     http:
