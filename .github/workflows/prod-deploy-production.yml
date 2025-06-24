@@ -8,9 +8,8 @@ on:
       - 'k8s/infrastructure/**'
       - 'scripts/smart-deploy.sh'
       - 'scripts/validate-terraform.sh'
-      - 'scripts/smart-install-infrastructure.sh'
+      - 'scripts/install-simple-infrastructure-no-traefik.sh'
       - 'scripts/clean-orphaned-webhooks.sh'
-      - 'scripts/fix-traefik-rbac.sh'
       - 'scripts/install-simple-monitoring.sh'
   workflow_dispatch:
 
@@ -95,21 +94,17 @@ jobs:
         kubectl get nodes
 
     # Smart Infrastructure Installation (only installs what's missing)
-    - name: Install Missing Infrastructure Components
+    - name: Install Simple Infrastructure (No Traefik)
       run: |
         # Make scripts executable
-        chmod +x scripts/smart-install-infrastructure.sh
+        chmod +x scripts/install-simple-infrastructure-no-traefik.sh
         chmod +x scripts/clean-orphaned-webhooks.sh
-        chmod +x scripts/fix-traefik-rbac.sh
         
         # Clean orphaned webhooks first
         ./scripts/clean-orphaned-webhooks.sh
         
-        # Install missing infrastructure components
-        ./scripts/smart-install-infrastructure.sh
-        
-        # Fix Traefik RBAC if needed
-        ./scripts/fix-traefik-rbac.sh
+        # Install simple infrastructure (no Traefik)
+        ./scripts/install-simple-infrastructure-no-traefik.sh
 
     # Configure Database Access
     - name: Configure Database Network Access
