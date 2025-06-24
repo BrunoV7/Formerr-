@@ -44,19 +44,47 @@ jobs:
     - name: Get Infrastructure Information
       id: get-infra
       run: |
-        cd infrastructure/gcp-staging
+        echo "🔍 Getting GCP infrastructure information..."
         
-        # Verificar se a infraestrutura existe
-        if terraform show > /dev/null 2>&1; then
-          echo "✅ Infrastructure found"
-          echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
-          echo "cluster_zone=${{ secrets.GCP_CLUSTER_ZONE }}" >> $GITHUB_OUTPUT
-          echo "project_id=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_OUTPUT
+        # Check if cluster exists via gcloud (direct API call)
+        CLUSTER_EXISTS=$(gcloud container clusters list --filter="name:formerr-staging-cluster" --format="value(name)" --project="${{ secrets.GCP_PROJECT_ID }}" 2>/dev/null || echo "")
+        
+        if [ -z "$CLUSTER_EXISTS" ]; then
+          echo "❌ Cluster 'formerr-staging-cluster' not found in GCP"
+          echo "📋 Available clusters:"
+          gcloud container clusters list --project="${{ secrets.GCP_PROJECT_ID }}"
+          echo ""
+          echo "🔧 Creating cluster via Terraform..."
+          
+          # If cluster doesn't exist, create it via Terraform
+          cd infrastructure/gcp-staging
+          
+          # Initialize Terraform if needed
+          if [ ! -d ".terraform" ]; then
+            terraform init
+          fi
+          
+          # Apply Terraform to create cluster
+          terraform apply -auto-approve \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="cluster_zone=${{ secrets.GCP_CLUSTER_ZONE }}"
+          
+          echo "✅ Cluster created via Terraform"
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
         else
-          echo "❌ Infrastructure not found or not initialized"
-          echo "Please run the infrastructure pipeline first"
-          exit 1
+          echo "✅ Found existing cluster: $CLUSTER_EXISTS"
+          CLUSTER_NAME="formerr-staging-cluster"
         fi
+        
+        # Set outputs for the workflow
+        echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+        echo "cluster_zone=${{ secrets.GCP_CLUSTER_ZONE }}" >> $GITHUB_OUTPUT
+        echo "project_id=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_OUTPUT
+        
+        echo "📤 GCP infrastructure information ready:"
+        echo "   • Cluster: $CLUSTER_NAME"
+        echo "   • Zone: ${{ secrets.GCP_CLUSTER_ZONE }}"
+        echo "   • Project: ${{ secrets.GCP_PROJECT_ID }}"
 
   # Job principal de build e deploy
   build-and-deploy:

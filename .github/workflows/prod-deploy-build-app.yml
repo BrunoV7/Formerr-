@@ -48,18 +48,42 @@ jobs:
     - name: Get Infrastructure Information
       id: get-infra
       run: |
-        cd infrastructure/digitalocean-production
+        echo "🔍 Getting infrastructure information from existing DigitalOcean resources..."
         
-        # Verificar se a infraestrutura existe
-        if terraform show > /dev/null 2>&1; then
-          echo "✅ Infrastructure found"
-          echo "registry_endpoint=$(terraform output -raw registry_endpoint)" >> $GITHUB_OUTPUT
-          echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Infrastructure not found or not initialized"
-          echo "Please run the infrastructure pipeline first"
+        # Check if cluster exists via doctl (direct API call)
+        CLUSTER_EXISTS=$(doctl kubernetes clusters list --output json | jq -r '.[] | select(.name == "formerr-production-cluster") | .name' || echo "")
+        
+        if [ -z "$CLUSTER_EXISTS" ]; then
+          echo "❌ Cluster 'formerr-production-cluster' not found in DigitalOcean"
+          echo "📋 Available clusters:"
+          doctl kubernetes clusters list
           exit 1
         fi
+        
+        echo "✅ Found existing cluster: $CLUSTER_EXISTS"
+        
+        # Check if registry exists via doctl
+        REGISTRY_EXISTS=$(doctl registry list --output json | jq -r '.[0].name' 2>/dev/null || echo "")
+        
+        if [ -z "$REGISTRY_EXISTS" ]; then
+          echo "⚠️  No registry found, using default"
+          REGISTRY_ENDPOINT="registry.digitalocean.com"
+          REGISTRY_NAME="formerr-registry"
+        else
+          echo "✅ Found existing registry: $REGISTRY_EXISTS"
+          REGISTRY_ENDPOINT="registry.digitalocean.com"
+          REGISTRY_NAME="$REGISTRY_EXISTS"
+        fi
+        
+        # Set outputs for the workflow
+        echo "registry_endpoint=$REGISTRY_ENDPOINT" >> $GITHUB_OUTPUT
+        echo "cluster_name=formerr-production-cluster" >> $GITHUB_OUTPUT
+        echo "registry_name=$REGISTRY_NAME" >> $GITHUB_OUTPUT
+        
+        echo "📤 Infrastructure information ready:"
+        echo "   • Cluster: formerr-production-cluster"
+        echo "   • Registry: $REGISTRY_ENDPOINT"
+        echo "   • Registry Name: $REGISTRY_NAME"
 
   # Job principal de build e deploy
   build-and-deploy:
