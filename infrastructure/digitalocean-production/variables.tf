@@ -92,7 +92,7 @@ variable "db_password" {
 variable "registry_name" {
   description = "Name of the container registry"
   type        = string
-  default     = "formerr-registry"
+  default     = "formerr"
 }
 
 variable "create_registry" {

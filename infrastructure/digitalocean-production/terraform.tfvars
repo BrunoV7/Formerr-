@@ -13,7 +13,7 @@ vpc_name = "default-nyc1"  # Adjust if your VPC has a different name
 
 # Registry configuration (DigitalOcean allows only one registry per account)
 create_registry = false  # Set to true if you don't have a registry yet
-registry_name = "formerr-registry"
+registry_name = "formerr"
 
 # Region where your cluster exists
 region = "nyc1"  # Adjust if your cluster is in a different region
