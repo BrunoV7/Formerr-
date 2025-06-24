@@ -1,0 +1,233 @@
+name: Build and Deploy Application
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Formerr-FastAPI/**'
+      - 'formerr-frontend/**'
+      - 'k8s/production/backend-deployment.yaml'
+      - 'k8s/production/frontend-deployment.yaml'
+      - 'Dockerfile'
+  workflow_dispatch:
+  # Também pode ser disparado após o sucesso da pipeline de infraestrutura
+  workflow_run:
+    workflows: ["Deploy Infrastructure (DigitalOcean)"]
+    types:
+      - completed
+
+env:
+  REGISTRY: registry.digitalocean.com
+  REGISTRY_NAME: formerr-registry
+  CLUSTER_NAME: formerr-production-cluster
+
+jobs:
+  # Job que verifica se a infraestrutura está pronta
+  check-infrastructure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
+    
+    outputs:
+      registry_endpoint: ${{ steps.get-infra.outputs.registry_endpoint }}
+      cluster_name: ${{ steps.get-infra.outputs.cluster_name }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_TOKEN_PROD }}
+
+    - name: Get Infrastructure Information
+      id: get-infra
+      run: |
+        cd infrastructure/digitalocean-production
+        
+        # Verificar se a infraestrutura existe
+        if terraform show > /dev/null 2>&1; then
+          echo "✅ Infrastructure found"
+          echo "registry_endpoint=$(terraform output -raw registry_endpoint)" >> $GITHUB_OUTPUT
+          echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Infrastructure not found or not initialized"
+          echo "Please run the infrastructure pipeline first"
+          exit 1
+        fi
+
+  # Job principal de build e deploy
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    needs: check-infrastructure
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_TOKEN_PROD }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.33.0'
+
+    # Configure kubectl
+    - name: Configure kubectl for Production Cluster
+      run: |
+        echo "Configuring kubectl for cluster: ${{ needs.check-infrastructure.outputs.cluster_name }}"
+        doctl kubernetes cluster kubeconfig save "${{ needs.check-infrastructure.outputs.cluster_name }}"
+        
+        # Verify cluster connection
+        kubectl cluster-info
+        kubectl get nodes
+
+    # Build and Push Backend
+    - name: Build and Push Backend Image
+      run: |
+        REGISTRY_ENDPOINT="${{ needs.check-infrastructure.outputs.registry_endpoint }}"
+        
+        # Log in to DigitalOcean Container Registry
+        doctl registry login
+        
+        # Build backend image (from repo root)
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-backend:latest \
+          ./Formerr-FastAPI
+        
+        # Push backend image
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-backend:latest
+
+    # Build and Push Frontend
+    - name: Build and Push Frontend Image
+      run: |
+        REGISTRY_ENDPOINT="${{ needs.check-infrastructure.outputs.registry_endpoint }}"
+        
+        # Build frontend image (from repo root)
+        docker build -t ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }} \
+          -t ${REGISTRY_ENDPOINT}/formerr-frontend:latest \
+          --build-arg NEXT_PUBLIC_API_URL=http://formerr-backend-service.formerr.svc.cluster.local:8000 \
+          ./formerr-frontend
+        
+        # Push frontend image
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}
+        docker push ${REGISTRY_ENDPOINT}/formerr-frontend:latest
+
+    # Deploy Application Secrets
+    - name: Deploy Application Secrets
+      run: |
+        # Create namespace if not exists
+        kubectl create namespace formerr --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Create application secrets
+        kubectl create secret generic formerr-app-secret \
+          --namespace=formerr \
+          --from-literal=GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}" \
+          --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}" \
+          --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+          --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    # Deploy Application
+    - name: Deploy Backend
+      run: |
+        REGISTRY_ENDPOINT="${{ needs.check-infrastructure.outputs.registry_endpoint }}"
+        
+        # Create a temporary deployment file with updated image
+        cp k8s/production/backend-deployment.yaml /tmp/backend-deployment.yaml
+        
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-backend:latest|${REGISTRY_ENDPOINT}/formerr-backend:${{ github.sha }}|g" /tmp/backend-deployment.yaml
+        
+        # Apply the deployment
+        kubectl apply -f /tmp/backend-deployment.yaml
+
+    - name: Deploy Frontend
+      run: |
+        REGISTRY_ENDPOINT="${{ needs.check-infrastructure.outputs.registry_endpoint }}"
+        
+        # Create a temporary deployment file with updated image
+        cp k8s/production/frontend-deployment.yaml /tmp/frontend-deployment.yaml
+        
+        # Update image tags in deployment
+        sed -i "s|registry.digitalocean.com/formerr-production/formerr-frontend:latest|${REGISTRY_ENDPOINT}/formerr-frontend:${{ github.sha }}|g" /tmp/frontend-deployment.yaml
+        
+        # Apply the deployment
+        kubectl apply -f /tmp/frontend-deployment.yaml
+
+    # Wait for deployment
+    - name: Wait for Deployment
+      run: |
+        kubectl rollout status deployment/formerr-backend -n formerr --timeout=600s
+        kubectl rollout status deployment/formerr-frontend -n formerr --timeout=600s
+
+    # Validate Deployment
+    - name: Validate Deployment
+      run: |
+        echo "🔍 Validating deployment status..."
+        
+        # Check if pods are running
+        echo "📦 Checking application pods:"
+        kubectl get pods -n formerr
+        
+        # Check services
+        echo "🌐 Checking services:"
+        kubectl get services -n formerr
+        
+        # Check ingress
+        echo "🔗 Checking ingress:"
+        kubectl get ingress -n formerr
+        
+        # Wait a bit for pods to start if they're still pending
+        echo "⏳ Giving pods time to start..."
+        sleep 30
+        
+        # Check backend health (internal) - with retry
+        echo "🏥 Checking backend health..."
+        for i in {1..5}; do
+          if kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health 2>/dev/null; then
+            echo "✅ Backend health check passed"
+            break
+          else
+            echo "⏳ Backend not ready yet, attempt $i/5..."
+            sleep 10
+          fi
+        done
+        
+        echo "✅ Application deployment validation completed!"
+
+    # Get Access Information
+    - name: Get Application Access Information
+      run: |
+        echo "🌐 === FORMERR APPLICATION ACCESS INFORMATION ==="
+        echo ""
+        echo "📱 MAIN APPLICATION (DIRECT LOADBALANCER):"
+        
+        # Get Frontend LoadBalancer IP
+        FRONTEND_LB_IP=$(kubectl get service formerr-frontend-service -n formerr -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Pending...")
+        echo "   IP: $FRONTEND_LB_IP"
+        echo "   URL: http://$FRONTEND_LB_IP (or https if SSL configured)"
+        echo "   Port: 80 (HTTP) / 443 (HTTPS)"
+        echo ""
+        echo "🔌 API BACKEND (INTERNAL ONLY):"
+        echo "   Internal URL: http://formerr-backend-service.formerr.svc.cluster.local:8000"
+        echo "   Status: Not exposed to internet (internal cluster access only)"
+        echo ""
+        echo "⚠️ IMPORTANT DNS CONFIGURATION:"
+        echo "   A    formerr.tech           -> $FRONTEND_LB_IP (Frontend Direct)"
+        echo ""
+        echo "📦 DEPLOYMENT DETAILS:"
+        echo "   Backend Image: ${{ needs.check-infrastructure.outputs.registry_endpoint }}/formerr-backend:${{ github.sha }}"
+        echo "   Frontend Image: ${{ needs.check-infrastructure.outputs.registry_endpoint }}/formerr-frontend:${{ github.sha }}"
+        echo "   Deployment Time: $(date)"
+        echo ""
+        echo "✅ Application deployment completed successfully!"

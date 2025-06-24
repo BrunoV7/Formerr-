@@ -25,7 +25,9 @@ spec:
         - containerPort: 3000
         env:
         - name: NEXT_PUBLIC_API_URL
-          value: "https://api.formerr.tech"
+          value: "http://formerr-backend-service.formerr.svc.cluster.local:8000"
+        - name: INTERNAL_API_URL
+          value: "http://formerr-backend-service.formerr.svc.cluster.local:8000"
         resources:
           requests:
             memory: "256Mi"
@@ -53,11 +55,22 @@ metadata:
   namespace: formerr
   labels:
     app: formerr-frontend
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "formerr-frontend-lb"
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
+    service.beta.kubernetes.io/do-loadbalancer-health-check-path: "/"
+    service.beta.kubernetes.io/do-loadbalancer-health-check-protocol: "http"
+    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
 spec:
   selector:
     app: formerr-frontend
   ports:
   - protocol: TCP
-    port: 3000
+    port: 80
     targetPort: 3000
-  type: ClusterIP
+    name: http
+  - protocol: TCP
+    port: 443
+    targetPort: 3000
+    name: https
+  type: LoadBalancer

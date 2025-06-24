@@ -1,0 +1,134 @@
+name: Deploy Staging Infrastructure (GCP)
+
+on:
+  push:
+    branches: [develop, staging]
+    paths:
+      - 'infrastructure/gcp-staging/**'
+      - 'k8s/infrastructure/**'
+      - 'k8s/staging/ingress.yaml'
+      - 'scripts/smart-install-infrastructure.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infrastructure/gcp-staging/**'
+      - 'k8s/infrastructure/**'
+  workflow_dispatch:
+
+env:
+  ENVIRONMENT: staging
+
+jobs:
+  deploy-staging-infrastructure:
+    runs-on: ubuntu-latest
+    
+    outputs:
+      cluster_name: ${{ steps.infra-output.outputs.cluster_name }}
+      cluster_zone: ${{ steps.infra-output.outputs.cluster_zone }}
+      project_id: ${{ steps.infra-output.outputs.project_id }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GCP SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.24.0'
+
+    # Infrastructure Detection and Deployment
+    - name: Terraform Init & Apply
+      working-directory: infrastructure/gcp-staging
+      run: |
+        echo "🏗️ Deploying GCP Staging Infrastructure..."
+        terraform init -input=false
+        terraform plan -out=tfplan -input=false
+        terraform apply -input=false tfplan
+
+    - name: Get GKE Credentials
+      run: |
+        CLUSTER_NAME=$(terraform -chdir=infrastructure/gcp-staging output -raw cluster_name)
+        echo "🔗 Connecting to GKE cluster: $CLUSTER_NAME"
+        gcloud container clusters get-credentials "$CLUSTER_NAME" \
+          --zone "${{ secrets.GCP_CLUSTER_ZONE }}" \
+          --project "${{ secrets.GCP_PROJECT_ID }}"
+        
+        # Verify cluster connection
+        kubectl cluster-info
+        kubectl get nodes
+
+    # Install Infrastructure Components
+    - name: Install Missing Infrastructure Components
+      run: |
+        echo "🔧 Installing infrastructure components..."
+        chmod +x scripts/smart-install-infrastructure.sh
+        ./scripts/smart-install-infrastructure.sh
+
+    # Deploy Ingress Configuration
+    - name: Deploy Ingress Configuration
+      run: |
+        echo "🌐 Deploying ingress configuration..."
+        kubectl apply -f k8s/staging/ingress.yaml
+
+    # Configure GCP-specific resources
+    - name: Configure GCP Resources
+      run: |
+        echo "☁️ Configuring GCP-specific resources..."
+        
+        # Create namespace if not exists
+        kubectl create namespace formerr --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Set up any GCP-specific configurations
+        # (Cloud SQL proxy, IAM roles, etc.)
+        echo "✅ GCP resources configured"
+
+    # Output infrastructure information
+    - name: Set Infrastructure Outputs
+      id: infra-output
+      run: |
+        cd infrastructure/gcp-staging
+        echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
+        echo "cluster_zone=${{ secrets.GCP_CLUSTER_ZONE }}" >> $GITHUB_OUTPUT
+        echo "project_id=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_OUTPUT
+
+    # Validate Infrastructure
+    - name: Validate Infrastructure
+      run: |
+        echo "🔍 Validating infrastructure deployment..."
+        
+        # Check cluster status
+        kubectl get nodes
+        kubectl get namespaces
+        
+        # Check ingress controller
+        kubectl get pods -n ingress-nginx || echo "⚠️ Ingress controller not found"
+        
+        echo "✅ Infrastructure validation completed"
+
+    # Get Infrastructure Information
+    - name: Get Infrastructure Information
+      run: |
+        echo "🏗️ === GCP STAGING INFRASTRUCTURE DEPLOYED ==="
+        echo ""
+        echo "☁️ GCP PROJECT: ${{ secrets.GCP_PROJECT_ID }}"
+        echo "🏷️ ENVIRONMENT: staging"
+        echo "📍 CLUSTER ZONE: ${{ secrets.GCP_CLUSTER_ZONE }}"
+        echo ""
+        echo "🔗 CLUSTER INFO:"
+        CLUSTER_NAME=$(terraform -chdir=infrastructure/gcp-staging output -raw cluster_name)
+        echo "   Name: $CLUSTER_NAME"
+        echo "   Zone: ${{ secrets.GCP_CLUSTER_ZONE }}"
+        echo ""
+        echo "🌐 INGRESS:"
+        INGRESS_IP=$(kubectl get ingress -n formerr -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Pending...")
+        echo "   IP: $INGRESS_IP"
+        echo ""
+        echo "✅ Infrastructure is ready for application deployment!"
+        echo "🚀 You can now run the application deployment pipeline."

@@ -1,0 +1,110 @@
+# Prometheus + Grafana configuration for GCP Staging
+prometheus:
+  prometheusSpec:
+    retention: "15d"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/load-balancer-type: "External"
+
+grafana:
+  enabled: true
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/load-balancer-type: "External"
+  
+  adminPassword: "admin123"
+  
+  persistence:
+    enabled: true
+    storageClassName: standard-rwo
+    size: 5Gi
+  
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+        access: proxy
+        isDefault: true
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      kubernetes-cluster-monitoring:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      kubernetes-pod-monitoring:
+        gnetId: 6417
+        revision: 1
+        datasource: Prometheus
+      node-exporter:
+        gnetId: 1860
+        revision: 27
+        datasource: Prometheus
+
+# Alert Manager configuration
+alertmanager:
+  enabled: true
+  service:
+    type: ClusterIP
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+
+# Kube State Metrics configuration
+kubeStateMetrics:
+  enabled: true
+
+# Default rules for monitoring
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: true
+    general: true
+    k8s: true
+    kubeApiserver: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubelet: true
+    kubeProxy: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true

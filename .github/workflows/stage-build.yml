@@ -1,0 +1,245 @@
+name: Build and Deploy Staging Application (GCP)
+
+on:
+  push:
+    branches: [develop, staging]
+    paths:
+      - 'Formerr-FastAPI/**'
+      - 'formerr-frontend/**'
+      - 'k8s/staging/backend-deployment.yaml'
+      - 'k8s/staging/frontend-deployment.yaml'
+      - 'Dockerfile'
+  workflow_dispatch:
+  # Também pode ser disparado após o sucesso da pipeline de infraestrutura
+  workflow_run:
+    workflows: ["Deploy Staging Infrastructure (GCP)"]
+    types:
+      - completed
+
+env:
+  ENVIRONMENT: staging
+
+jobs:
+  # Job que verifica se a infraestrutura está pronta
+  check-infrastructure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
+    
+    outputs:
+      cluster_name: ${{ steps.get-infra.outputs.cluster_name }}
+      cluster_zone: ${{ steps.get-infra.outputs.cluster_zone }}
+      project_id: ${{ steps.get-infra.outputs.project_id }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GCP SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+
+    - name: Get Infrastructure Information
+      id: get-infra
+      run: |
+        cd infrastructure/gcp-staging
+        
+        # Verificar se a infraestrutura existe
+        if terraform show > /dev/null 2>&1; then
+          echo "✅ Infrastructure found"
+          echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
+          echo "cluster_zone=${{ secrets.GCP_CLUSTER_ZONE }}" >> $GITHUB_OUTPUT
+          echo "project_id=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Infrastructure not found or not initialized"
+          echo "Please run the infrastructure pipeline first"
+          exit 1
+        fi
+
+  # Job principal de build e deploy
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    needs: check-infrastructure
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GCP SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ needs.check-infrastructure.outputs.project_id }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.24.0'
+
+    # Configure kubectl
+    - name: Configure kubectl for GKE Cluster
+      run: |
+        echo "🔗 Connecting to GKE cluster: ${{ needs.check-infrastructure.outputs.cluster_name }}"
+        gcloud container clusters get-credentials "${{ needs.check-infrastructure.outputs.cluster_name }}" \
+          --zone "${{ needs.check-infrastructure.outputs.cluster_zone }}" \
+          --project "${{ needs.check-infrastructure.outputs.project_id }}"
+        
+        # Verify cluster connection
+        kubectl cluster-info
+        kubectl get nodes
+
+    # Configure Docker for GCR
+    - name: Configure Docker for GCR
+      run: |
+        echo "🐳 Configuring Docker for Google Container Registry..."
+        gcloud auth configure-docker
+
+    # Build & Push Images to GCR
+    - name: Build & Push Backend Image to GCR
+      run: |
+        echo "🏗️ Building backend image..."
+        docker build -t gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-backend:${{ github.sha }} \
+          -t gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-backend:staging-latest \
+          ./Formerr-FastAPI
+        
+        echo "📤 Pushing backend image..."
+        docker push gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-backend:${{ github.sha }}
+        docker push gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-backend:staging-latest
+
+    - name: Build & Push Frontend Image to GCR
+      run: |
+        echo "🏗️ Building frontend image..."
+        docker build -t gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-frontend:${{ github.sha }} \
+          -t gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-frontend:staging-latest \
+          --build-arg NEXT_PUBLIC_API_URL=http://formerr-backend-service.formerr.svc.cluster.local:8000 \
+          ./formerr-frontend
+        
+        echo "📤 Pushing frontend image..."
+        docker push gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-frontend:${{ github.sha }}
+        docker push gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-frontend:staging-latest
+
+    # Deploy Application Secrets (if needed for staging)
+    - name: Deploy Application Secrets
+      run: |
+        echo "🔐 Deploying application secrets..."
+        
+        # Create namespace if not exists
+        kubectl create namespace formerr --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Create staging secrets if they exist
+        if [ -n "${{ secrets.STAGING_GITHUB_CLIENT_ID }}" ]; then
+          kubectl create secret generic formerr-app-secret \
+            --namespace=formerr \
+            --from-literal=GITHUB_CLIENT_ID="${{ secrets.STAGING_GITHUB_CLIENT_ID }}" \
+            --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.STAGING_GITHUB_CLIENT_SECRET }}" \
+            --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=SESSION_SECRET="${{ secrets.STAGING_SESSION_SECRET }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        else
+          echo "⚠️ Using production secrets for staging (consider creating staging-specific secrets)"
+          kubectl create secret generic formerr-app-secret \
+            --namespace=formerr \
+            --from-literal=GITHUB_CLIENT_ID="${{ secrets.CLIENT_ID }}" \
+            --from-literal=GITHUB_CLIENT_SECRET="${{ secrets.CLIENT_SECRET }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        fi
+
+    # Deploy to GKE
+    - name: Deploy Backend to GKE
+      run: |
+        echo "🚀 Deploying backend..."
+        PROJECT_ID="${{ needs.check-infrastructure.outputs.project_id }}"
+        
+        # Create a temporary deployment file with updated image
+        cp k8s/staging/backend-deployment.yaml /tmp/backend-deployment.yaml
+        
+        # Update image tags in deployment
+        sed -i "s|gcr.io/YOUR_PROJECT_ID/formerr-backend:staging-latest|gcr.io/${PROJECT_ID}/formerr-backend:${{ github.sha }}|g" /tmp/backend-deployment.yaml
+        
+        # Apply the deployment
+        kubectl apply -f /tmp/backend-deployment.yaml
+
+    - name: Deploy Frontend to GKE
+      run: |
+        echo "🚀 Deploying frontend..."
+        PROJECT_ID="${{ needs.check-infrastructure.outputs.project_id }}"
+        
+        # Create a temporary deployment file with updated image
+        cp k8s/staging/frontend-deployment.yaml /tmp/frontend-deployment.yaml
+        
+        # Update image tags in deployment
+        sed -i "s|gcr.io/YOUR_PROJECT_ID/formerr-frontend:staging-latest|gcr.io/${PROJECT_ID}/formerr-frontend:${{ github.sha }}|g" /tmp/frontend-deployment.yaml
+        
+        # Apply the deployment
+        kubectl apply -f /tmp/frontend-deployment.yaml
+
+    # Wait for deployment
+    - name: Wait for Deployment
+      run: |
+        echo "⏳ Waiting for deployments to complete..."
+        kubectl rollout status deployment/formerr-backend -n formerr --timeout=300s
+        kubectl rollout status deployment/formerr-frontend -n formerr --timeout=300s
+
+    # Validate Deployment
+    - name: Validate Deployment
+      run: |
+        echo "🔍 Validating deployment status..."
+        
+        # Check if pods are running
+        echo "📦 Checking application pods:"
+        kubectl get pods -n formerr
+        
+        # Check services
+        echo "🌐 Checking services:"
+        kubectl get services -n formerr
+        
+        # Check ingress
+        echo "🔗 Checking ingress:"
+        kubectl get ingress -n formerr
+        
+        # Wait a bit for pods to start if they're still pending
+        echo "⏳ Giving pods time to start..."
+        sleep 30
+        
+        # Check backend health (internal) - with retry
+        echo "🏥 Checking backend health..."
+        for i in {1..5}; do
+          if kubectl exec -n formerr deployment/formerr-backend -- curl -f http://localhost:8000/health 2>/dev/null; then
+            echo "✅ Backend health check passed"
+            break
+          else
+            echo "⏳ Backend not ready yet, attempt $i/5..."
+            sleep 10
+          fi
+        done
+        
+        echo "✅ Staging deployment validation completed!"
+
+    # Get Access Information and Notify Success
+    - name: Get Staging Access Information
+      run: |
+        echo "🌐 === FORMERR STAGING ACCESS INFORMATION ==="
+        echo ""
+        echo "☁️ GCP PROJECT: ${{ needs.check-infrastructure.outputs.project_id }}"
+        echo "🏷️ ENVIRONMENT: staging"
+        echo "📍 CLUSTER: ${{ needs.check-infrastructure.outputs.cluster_name }}"
+        echo "📍 ZONE: ${{ needs.check-infrastructure.outputs.cluster_zone }}"
+        echo ""
+        echo "🌐 APPLICATION ACCESS:"
+        INGRESS_IP=$(kubectl get ingress -n formerr -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Pending...")
+        echo "   IP: $INGRESS_IP"
+        echo "   URL: http://$INGRESS_IP (staging environment)"
+        echo ""
+        echo "📦 DEPLOYMENT DETAILS:"
+        echo "   Backend Image: gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-backend:${{ github.sha }}"
+        echo "   Frontend Image: gcr.io/${{ needs.check-infrastructure.outputs.project_id }}/formerr-frontend:${{ github.sha }}"
+        echo "   Deployment Time: $(date)"
+        echo ""
+        echo "🎉 Staging environment deployed successfully!"
+        echo "📝 You can now test your changes in the staging environment."
+        echo "🚀 If everything looks good, merge to main to deploy to production."

@@ -1,0 +1,8 @@
+# Terraform configuration for GCP Staging
+project_id     = "your-gcp-project-id"
+region         = "us-central1"
+zone           = "us-central1-a"
+cluster_name   = "formerr-staging-cluster"
+node_count     = 2
+machine_type   = "e2-standard-2"
+environment    = "staging"
