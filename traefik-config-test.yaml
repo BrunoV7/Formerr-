@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config-test
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+data:
+  traefik.yml: |
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
+
+    serversTransport:
+      insecureSkipVerify: true
+
+    entryPoints:
+      # HTTP Entry Point (NO redirect for testing)
+      web:
+        address: ":80"
+      
+      # HTTPS Entry Point
+      websecure:
+        address: ":443"
+        http:
+          tls:
+            options: default
+      
+      # Ping endpoint for health checks - CRITICAL FIX
+      ping:
+        address: ":8080"
+      
+      # Traefik Dashboard (internal only)
+      traefik:
+        address: ":8082"
+
+    # Let's Encrypt Configuration
+    certificatesResolvers:
+      letsencrypt:
+        acme:
+          email: admin@formerr.tech
+          storage: /data/acme.json
+          keyType: EC256
+          httpChallenge:
+            entryPoint: web
+      
+      letsencrypt-staging:
+        acme:
+          email: admin@formerr.tech
+          storage: /data/acme-staging.json
+          caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+          keyType: EC256
+          httpChallenge:
+            entryPoint: web
+
+    # Service Discovery
+    providers:
+      kubernetesIngress:
+        allowCrossNamespace: true
+        allowExternalNameServices: true
+        publishedService:
+          enabled: true
+      kubernetesCRD:
+        allowCrossNamespace: true
+        allowExternalNameServices: true
+
+    # API and Dashboard Configuration
+    api:
+      dashboard: true
+      insecure: false
+      debug: false
+
+    # Health Check Endpoint - CRITICAL FIX
+    ping:
+      entryPoint: ping
+
+    # Logging Configuration
+    log:
+      level: INFO
+      format: json
+
+    # Access Logs
+    accessLog:
+      format: json
+      filters:
+        statusCodes:
+        - "400-499"
+        - "500-599"
+
+    # Metrics for Prometheus - Enhanced monitoring
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addServicesLabels: true
+        addRoutersLabels: true
+        entryPoint: traefik
+
+    # TLS Configuration
+    tls:
+      options:
+        default:
+          sslProtocols:
+          - TLSv1.2
+          - TLSv1.3
+          cipherSuites:
+          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+          - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+          - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+          - TLS_RSA_WITH_AES_256_GCM_SHA384
+          - TLS_RSA_WITH_AES_128_GCM_SHA256

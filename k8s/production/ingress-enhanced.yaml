@@ -1,0 +1,150 @@
+---
+# Production Ingress with Traefik annotations and enhanced configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: formerr-ingress
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: production
+  annotations:
+    # Use Traefik IngressClass
+    kubernetes.io/ingress.class: "traefik"
+    
+    # SSL/TLS Configuration
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    
+    # Security Headers
+    traefik.ingress.kubernetes.io/router.middlewares: "formerr-security@kubernetescrd"
+    
+    # Rate Limiting
+    traefik.ingress.kubernetes.io/router.priority: "1000"
+    
+    # Redirect HTTP to HTTPS
+    traefik.ingress.kubernetes.io/redirect-scheme: "https"
+    traefik.ingress.kubernetes.io/redirect-permanent: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - formerr.tech
+    - api.formerr.tech
+    secretName: formerr-tls
+  rules:
+  - host: formerr.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-frontend-service
+            port:
+              number: 3000
+  - host: api.formerr.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-backend-service
+            port:
+              number: 8000
+
+---
+# Traefik Middleware for Security Headers
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: security
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: production
+spec:
+  headers:
+    frameDeny: true
+    sslRedirect: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    forceSTSHeader: true
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 63072000
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+    customResponseHeaders:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+      X-XSS-Protection: "1; mode=block"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api.formerr.tech; frame-ancestors 'none'"
+
+---
+# Traefik Middleware for Rate Limiting
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: production
+spec:
+  rateLimit:
+    average: 100
+    period: "1m"
+    burst: 50
+
+---
+# Traefik IngressRoute for enhanced routing (alternative to Ingress)
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: formerr-frontend-route
+  namespace: formerr
+  labels:
+    app: formerr-frontend
+    environment: production
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`formerr.tech`)
+    kind: Rule
+    services:
+    - name: formerr-frontend-service
+      port: 3000
+    middlewares:
+    - name: security
+    - name: rate-limit
+  tls:
+    certResolver: letsencrypt
+
+---
+# Traefik IngressRoute for Backend API
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: formerr-backend-route
+  namespace: formerr
+  labels:
+    app: formerr-backend
+    environment: production
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`api.formerr.tech`)
+    kind: Rule
+    services:
+    - name: formerr-backend-service
+      port: 8000
+    middlewares:
+    - name: security
+    - name: rate-limit
+  tls:
+    certResolver: letsencrypt

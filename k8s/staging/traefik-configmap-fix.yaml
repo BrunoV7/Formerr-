@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: traefik
+data:
+  traefik.yml: |
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
+
+    serversTransport:
+      insecureSkipVerify: true
+
+    entryPoints:
+      web:
+        address: ":80"
+        http:
+          redirections:
+            entrypoint:
+              to: websecure
+              scheme: https
+              permanent: true
+      websecure:
+        address: ":443"
+      traefik:
+        address: ":8080"
+
+    certificatesResolvers:
+      letsencrypt:
+        acme:
+          email: admin@formerr.example.com  # Change this to your email
+          storage: /data/acme.json
+          httpChallenge:
+            entryPoint: web
+      letsencrypt-staging:
+        acme:
+          email: admin@formerr.example.com  # Change this to your email
+          storage: /data/acme-staging.json
+          caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+          httpChallenge:
+            entryPoint: web
+
+    providers:
+      kubernetesIngress: {}
+      kubernetesCRD: {}
+
+    api:
+      dashboard: true
+      insecure: true
+
+    ping: {}
+
+    log:
+      level: INFO
+
+    accessLog: {}

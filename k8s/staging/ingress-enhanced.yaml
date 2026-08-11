@@ -1,0 +1,151 @@
+---
+# Enhanced Staging Ingress with Traefik annotations
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: formerr-ingress
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: staging
+  annotations:
+    # Use Traefik IngressClass
+    kubernetes.io/ingress.class: "traefik"
+    
+    # SSL/TLS Configuration - using staging Let's Encrypt
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt-staging"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    
+    # Security Headers
+    traefik.ingress.kubernetes.io/router.middlewares: "formerr-security-staging@kubernetescrd"
+    
+    # Rate Limiting
+    traefik.ingress.kubernetes.io/router.priority: "1000"
+    
+    # Redirect HTTP to HTTPS
+    traefik.ingress.kubernetes.io/redirect-scheme: "https"
+    traefik.ingress.kubernetes.io/redirect-permanent: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - staging.formerr.tech
+    - api-staging.formerr.tech
+    secretName: formerr-staging-tls
+  rules:
+  - host: staging.formerr.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-frontend-service
+            port:
+              number: 3000
+  - host: api-staging.formerr.tech
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: formerr-backend-service
+            port:
+              number: 8000
+
+---
+# Traefik Middleware for Security Headers (Staging)
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: security-staging
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: staging
+spec:
+  headers:
+    frameDeny: true
+    sslRedirect: true
+    browserXssFilter: true
+    contentTypeNosniff: true
+    forceSTSHeader: true
+    stsIncludeSubdomains: true
+    stsPreload: false  # Don't preload for staging
+    stsSeconds: 3600   # Shorter duration for staging
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+    customResponseHeaders:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+      X-XSS-Protection: "1; mode=block"
+      X-Environment: "staging"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api-staging.formerr.tech; frame-ancestors 'none'"
+
+---
+# Traefik Middleware for Rate Limiting (Staging - more permissive)
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-staging
+  namespace: formerr
+  labels:
+    app: formerr
+    environment: staging
+spec:
+  rateLimit:
+    average: 200
+    period: "1m"
+    burst: 100
+
+---
+# Traefik IngressRoute for Staging Frontend
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: formerr-frontend-route-staging
+  namespace: formerr
+  labels:
+    app: formerr-frontend
+    environment: staging
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`staging.formerr.tech`)
+    kind: Rule
+    services:
+    - name: formerr-frontend-service
+      port: 3000
+    middlewares:
+    - name: security-staging
+    - name: rate-limit-staging
+  tls:
+    certResolver: letsencrypt-staging
+
+---
+# Traefik IngressRoute for Staging Backend API
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: formerr-backend-route-staging
+  namespace: formerr
+  labels:
+    app: formerr-backend
+    environment: staging
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`api-staging.formerr.tech`)
+    kind: Rule
+    services:
+    - name: formerr-backend-service
+      port: 8000
+    middlewares:
+    - name: security-staging
+    - name: rate-limit-staging
+  tls:
+    certResolver: letsencrypt-staging

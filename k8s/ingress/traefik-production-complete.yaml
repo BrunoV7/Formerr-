@@ -1,0 +1,576 @@
+---
+# Enhanced Traefik Configuration - Production Ready
+# This manifest includes all fixes for issues encountered during deployment
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+  labels:
+    name: traefik
+    environment: production
+    monitoring: enabled
+
+---
+# Enhanced Traefik ConfigMap with all required endpoints and configurations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+data:
+  traefik.yml: |
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
+
+    serversTransport:
+      insecureSkipVerify: true
+
+    entryPoints:
+      # HTTP Entry Point (redirects to HTTPS)
+      web:
+        address: ":80"
+        http:
+          redirections:
+            entrypoint:
+              to: websecure
+              scheme: https
+              permanent: true
+      
+      # HTTPS Entry Point
+      websecure:
+        address: ":443"
+        http:
+          tls:
+            options: default
+      
+      # Ping endpoint for health checks - CRITICAL FIX
+      ping:
+        address: ":8080"
+      
+      # Traefik Dashboard (internal only)
+      traefik:
+        address: ":8082"
+
+    # Let's Encrypt Configuration
+    certificatesResolvers:
+      letsencrypt:
+        acme:
+          email: admin@formerr.tech
+          storage: /data/acme.json
+          keyType: EC256
+          httpChallenge:
+            entryPoint: web
+          # Alternative: DNS Challenge for wildcard certificates
+          # dnsChallenge:
+          #   provider: digitalocean
+      
+      letsencrypt-staging:
+        acme:
+          email: admin@formerr.tech
+          storage: /data/acme-staging.json
+          caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+          keyType: EC256
+          httpChallenge:
+            entryPoint: web
+
+    # Service Discovery
+    providers:
+      kubernetesIngress:
+        allowCrossNamespace: true
+        allowExternalNameServices: true
+        publishedService:
+          enabled: true
+      kubernetesCRD:
+        allowCrossNamespace: true
+        allowExternalNameServices: true
+
+    # API and Dashboard Configuration
+    api:
+      dashboard: true
+      insecure: false
+      debug: false
+
+    # Health Check Endpoint - CRITICAL FIX
+    ping:
+      entryPoint: ping
+
+    # Logging Configuration
+    log:
+      level: INFO
+      format: json
+
+    # Access Logs
+    accessLog:
+      format: json
+      filters:
+        statusCodes:
+        - "400-499"
+        - "500-599"
+
+    # Metrics for Prometheus - Enhanced monitoring
+    metrics:
+      prometheus:
+        addEntryPointsLabels: true
+        addServicesLabels: true
+        addRoutersLabels: true
+        entryPoint: traefik
+
+    # TLS Configuration
+    tls:
+      options:
+        default:
+          sslProtocols:
+          - TLSv1.2
+          - TLSv1.3
+          cipherSuites:
+          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+          - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+          - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+          - TLS_RSA_WITH_AES_256_GCM_SHA384
+          - TLS_RSA_WITH_AES_128_GCM_SHA256
+
+---
+# Traefik Service Account with enhanced permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+automountServiceAccountToken: true
+
+---
+# Enhanced ClusterRole for Traefik with all required permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik
+  labels:
+    app: traefik
+    environment: production
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - ingressclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  - networking.k8s.io
+  resources:
+  - ingresses/status
+  verbs:
+  - update
+- apiGroups:
+  - traefik.containo.us
+  resources:
+  - ingressroutes
+  - ingressroutetcps
+  - ingressrouteudps
+  - middlewares
+  - middlewaretcps
+  - tlsoptions
+  - tlsstores
+  - traefikservices
+  - serverstransports
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+# ClusterRoleBinding for Traefik
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik
+  labels:
+    app: traefik
+    environment: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik
+subjects:
+- kind: ServiceAccount
+  name: traefik
+  namespace: traefik
+
+---
+# Traefik Deployment with enhanced configuration and monitoring
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+    version: v3.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+        environment: production
+        version: v3.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: traefik
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+      - name: traefik
+        image: traefik:v3.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - --configfile=/etc/traefik/traefik.yml
+        ports:
+        - name: web
+          containerPort: 80
+          protocol: TCP
+        - name: websecure
+          containerPort: 443
+          protocol: TCP
+        - name: ping
+          containerPort: 8080
+          protocol: TCP
+        - name: traefik
+          containerPort: 8082
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        # CRITICAL FIX: Health checks using the ping endpoint
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: ping
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: ping
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /ping
+            port: ping
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65532
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+        volumeMounts:
+        - name: config
+          mountPath: /etc/traefik
+          readOnly: true
+        - name: acme-storage
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: traefik-config
+      - name: acme-storage
+        persistentVolumeClaim:
+          claimName: traefik-acme-storage
+      - name: tmp
+        emptyDir: {}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# PersistentVolumeClaim for ACME storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: traefik-acme-storage
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: do-block-storage
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Traefik LoadBalancer Service - MAIN ENTRY POINT
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+  annotations:
+    # DigitalOcean LoadBalancer configuration
+    service.beta.kubernetes.io/do-loadbalancer-name: "formerr-production-lb"
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-protocol: "http"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-path: "/ping"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-port: "8080"
+    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+    service.beta.kubernetes.io/do-loadbalancer-disable-lets-encrypt-dns-records: "false"
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  ports:
+  - name: web
+    port: 80
+    targetPort: web
+    protocol: TCP
+  - name: websecure
+    port: 443
+    targetPort: websecure
+    protocol: TCP
+  - name: ping
+    port: 8080
+    targetPort: ping
+    protocol: TCP
+  loadBalancerSourceRanges: []
+
+---
+# Traefik Dashboard Service (internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+  labels:
+    app: traefik
+    component: dashboard
+    environment: production
+spec:
+  type: ClusterIP
+  selector:
+    app: traefik
+  ports:
+  - name: dashboard
+    port: 8082
+    targetPort: traefik
+    protocol: TCP
+
+---
+# IngressClass for Traefik - CRITICAL for routing
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+  labels:
+    app: traefik
+    environment: production
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: traefik.io/ingress-controller
+
+---
+# Traefik Dashboard IngressRoute (secure access)
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+  labels:
+    app: traefik
+    component: dashboard
+    environment: production
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`traefik.formerr.tech`)
+    kind: Rule
+    services:
+    - name: traefik-dashboard
+      port: 8082
+    middlewares:
+    - name: traefik-auth
+  tls:
+    certResolver: letsencrypt
+
+---
+# Basic Auth Middleware for Dashboard
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: traefik-auth
+  namespace: traefik
+  labels:
+    app: traefik
+    component: dashboard
+    environment: production
+spec:
+  basicAuth:
+    secret: traefik-dashboard-auth
+
+---
+# Dashboard Auth Secret (admin:admin - change in production!)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: traefik-dashboard-auth
+  namespace: traefik
+  labels:
+    app: traefik
+    component: dashboard
+    environment: production
+type: Opaque
+data:
+  users: YWRtaW46JGFwcjEkSDY1djJOZE4kMk9oZVFvS1ZWVXJZSWdUNVJ1SUN5LgoK  # admin:admin
+
+---
+# NetworkPolicy for Traefik security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traefik-netpol
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+spec:
+  podSelector:
+    matchLabels:
+      app: traefik
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from: []  # Allow all ingress to LoadBalancer
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8082
+  egress:
+  - {}  # Allow all egress for Let's Encrypt and service discovery
+
+---
+# HorizontalPodAutoscaler for Traefik
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: traefik-hpa
+  namespace: traefik
+  labels:
+    app: traefik
+    environment: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: traefik
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
